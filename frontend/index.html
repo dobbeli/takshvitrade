@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Takshvi Trade — NSE Signal Intelligence</title>
+<meta name="description" content="ATR-based swing signals, multi-factor scoring, and Groww-ready order sheets for Indian retail traders."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ─────────────────────────────────────────
+   DESIGN TOKENS
+───────────────────────────────────────── */
+:root {
+  --black:  #030405;
+  --dark:   #080b0e;
+  --card:   #0d1117;
+  --card2:  #111820;
+  --border: #181f28;
+  --border2:#1e2836;
+  --cyan:   #00e5c8;
+  --cyan2:  #00b8a0;
+  --green:  #1ddd8a;
+  --red:    #ff4560;
+  --gold:   #f5c018;
+  --blue:   #378add;
+  --muted:  #3d5068;
+  --text:   #8da4bc;
+  --white:  #e8f0f8;
+  --font-display: 'Syne', sans-serif;
+  --font-mono:    'DM Mono', monospace;
+  --font-body:    'DM Sans', sans-serif;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--black);color:var(--text);font-family:var(--font-body);font-weight:300;overflow-x:hidden;cursor:none}
+
+/* custom cursor */
+#cursor{position:fixed;width:8px;height:8px;background:var(--cyan);border-radius:50%;pointer-events:none;z-index:9999;transition:transform 0.1s;mix-blend-mode:difference}
+#cursor-ring{position:fixed;width:32px;height:32px;border:1px solid rgba(0,229,200,0.4);border-radius:50%;pointer-events:none;z-index:9998;transition:all 0.15s ease}
+
+/* noise */
+body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");pointer-events:none;z-index:1}
+
+/* ─── NAV ─── */
+nav{position:fixed;top:0;left:0;right:0;z-index:500;display:flex;align-items:center;justify-content:space-between;padding:1.1rem 4rem;background:rgba(3,4,5,0.8);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);transition:border-color 0.3s}
+nav.scrolled{border-bottom-color:rgba(0,229,200,0.15)}
+.logo{font-family:var(--font-display);font-weight:800;font-size:1.25rem;letter-spacing:-0.03em;color:var(--white);text-decoration:none}
+.logo em{font-style:normal;color:var(--cyan)}
+.nav-links{display:flex;gap:2.5rem;list-style:none}
+.nav-links a{font-family:var(--font-mono);font-size:0.68rem;color:var(--muted);text-decoration:none;letter-spacing:0.12em;text-transform:uppercase;transition:color 0.2s}
+.nav-links a:hover{color:var(--cyan)}
+.nav-right{display:flex;gap:0.8rem;align-items:center}
+.btn-nav{font-family:var(--font-mono);font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.55rem 1.2rem;border:1px solid var(--border2);background:transparent;color:var(--text);cursor:pointer;text-decoration:none;transition:all 0.2s}
+.btn-nav:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn-nav-solid{background:var(--cyan);border-color:var(--cyan);color:var(--black);font-weight:500}
+.btn-nav-solid:hover{background:var(--green);border-color:var(--green);color:var(--black)}
+
+/* ─── HERO ─── */
+#hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:9rem 4rem 5rem;position:relative;overflow:hidden}
+.hero-mesh{position:absolute;inset:0;background:
+  radial-gradient(ellipse 60% 50% at 20% 30%, rgba(0,229,200,0.07) 0%, transparent 60%),
+  radial-gradient(ellipse 40% 60% at 80% 70%, rgba(29,221,138,0.04) 0%, transparent 60%);
+  pointer-events:none}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,229,200,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,200,0.03) 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(ellipse 90% 70% at 50% 40%,black,transparent)}
+.eyebrow{font-family:var(--font-mono);font-size:0.68rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--cyan);margin-bottom:1.8rem;display:flex;align-items:center;gap:0.8rem}
+.eyebrow::before{content:'';width:28px;height:1px;background:var(--cyan);flex-shrink:0}
+h1{font-family:var(--font-display);font-weight:800;font-size:clamp(3.2rem,8vw,7.5rem);line-height:0.92;letter-spacing:-0.05em;color:var(--white);margin-bottom:2.2rem;max-width:1000px}
+h1 .accent{color:var(--cyan);display:block}
+.hero-body{font-size:1.05rem;color:var(--muted);max-width:460px;line-height:1.8;margin-bottom:3.5rem}
+.hero-actions{display:flex;gap:1rem;flex-wrap:wrap;align-items:center}
+.btn-primary{background:var(--cyan);color:var(--black);font-family:var(--font-display);font-weight:700;font-size:0.9rem;padding:1.05rem 2.6rem;border:none;cursor:pointer;text-decoration:none;display:inline-block;letter-spacing:0.01em;transition:all 0.2s;position:relative;overflow:hidden}
+.btn-primary::after{content:'→';position:absolute;right:-20px;opacity:0;transition:all 0.2s}
+.btn-primary:hover{background:var(--green);padding-right:3.2rem}
+.btn-primary:hover::after{right:1rem;opacity:1}
+.btn-ghost{border:1px solid var(--border2);color:var(--text);font-family:var(--font-mono);font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;padding:1.05rem 2rem;background:transparent;cursor:pointer;text-decoration:none;display:inline-block;transition:all 0.2s}
+.btn-ghost:hover{border-color:var(--cyan);color:var(--cyan)}
+
+/* nifty badge */
+.nifty-badge{display:inline-flex;align-items:center;gap:0.8rem;border:1px solid var(--border2);padding:0.6rem 1rem;background:var(--card);margin-bottom:2rem}
+.nifty-dot{width:7px;height:7px;border-radius:50%;animation:pulse 1.8s ease infinite}
+.dot-green{background:var(--green)}
+.dot-red{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+.nifty-text{font-family:var(--font-mono);font-size:0.72rem;color:var(--text)}
+.nifty-text strong{color:var(--white)}
+
+/* ─── TICKER ─── */
+.ticker-wrap{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:0.85rem 0;overflow:hidden;background:rgba(8,11,14,0.7);position:relative;z-index:2}
+.ticker-track{display:flex;gap:0;animation:scroll 40s linear infinite;width:max-content}
+.ticker-item{display:inline-flex;align-items:center;gap:0.5rem;padding:0 2rem;border-right:1px solid var(--border);font-family:var(--font-mono);font-size:0.72rem;white-space:nowrap}
+.t-name{color:var(--white);font-weight:500;letter-spacing:0.05em}
+.t-price{color:var(--muted)}
+.t-up{color:var(--green)}
+.t-dn{color:var(--red)}
+@keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ─── STATS ─── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border)}
+.stat{padding:3rem;border-right:1px solid var(--border);position:relative;overflow:hidden}
+.stat:last-child{border-right:none}
+.stat::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);transform:scaleX(0);transition:transform 0.5s}
+.stat:hover::after{transform:scaleX(1)}
+.stat-n{font-family:var(--font-display);font-weight:800;font-size:3.2rem;color:var(--white);letter-spacing:-0.06em;line-height:1;margin-bottom:0.5rem}
+.stat-n em{font-style:normal;color:var(--cyan)}
+.stat-l{font-family:var(--font-mono);font-size:0.64rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted)}
+
+/* ─── SECTION BASE ─── */
+section{padding:8rem 4rem;position:relative}
+.sec-tag{font-family:var(--font-mono);font-size:0.64rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--cyan);margin-bottom:1rem;display:flex;align-items:center;gap:0.7rem}
+.sec-tag::before{content:'';width:18px;height:1px;background:var(--cyan);flex-shrink:0}
+h2{font-family:var(--font-display);font-weight:800;font-size:clamp(2.2rem,4.5vw,3.8rem);color:var(--white);letter-spacing:-0.05em;line-height:1;margin-bottom:1.2rem}
+.sec-lead{color:var(--muted);font-size:0.98rem;line-height:1.85;max-width:500px;margin-bottom:4rem}
+
+/* ─── SCANNERS ─── */
+#scanners{background:var(--dark)}
+.scanner-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border)}
+.sc-card{background:var(--card);padding:2.8rem;transition:background 0.3s;position:relative;overflow:hidden}
+.sc-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0;transition:opacity 0.4s}
+.sc-card:hover{background:var(--card2)}
+.sc-card:hover::before{opacity:1}
+.sc-icon{font-size:1.4rem;margin-bottom:1.6rem;display:block}
+.sc-title{font-family:var(--font-display);font-weight:700;font-size:1.05rem;color:var(--white);margin-bottom:0.6rem;letter-spacing:-0.02em}
+.sc-desc{font-size:0.83rem;color:var(--muted);line-height:1.75}
+.badge{display:inline-block;margin-top:1.2rem;font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;padding:0.22rem 0.6rem;border:1px solid var(--border2);color:var(--muted)}
+.badge-live{border-color:rgba(29,221,138,0.5);color:var(--green)}
+.badge-soon{border-color:rgba(245,192,24,0.4);color:var(--gold)}
+
+/* ─── SIGNALS SECTION ─── */
+#signals-sec{background:var(--black)}
+.sig-layout{display:grid;grid-template-columns:1.2fr 1fr;gap:5rem;align-items:start}
+
+/* signal table */
+.sig-table{border:1px solid var(--border);overflow:hidden}
+.sig-thead{display:grid;grid-template-columns:2fr 0.8fr 1fr 0.8fr 1fr;padding:0.8rem 1.4rem;background:var(--dark);border-bottom:1px solid var(--border)}
+.sig-thead span{font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted)}
+.sig-row{display:grid;grid-template-columns:2fr 0.8fr 1fr 0.8fr 1fr;padding:1.1rem 1.4rem;border-bottom:1px solid var(--border);align-items:center;cursor:pointer;transition:background 0.2s}
+.sig-row:hover{background:rgba(0,229,200,0.03)}
+.sig-row:last-child{border-bottom:none}
+.sig-stock{font-family:var(--font-display);font-weight:700;font-size:0.95rem;color:var(--white)}
+.sig-score{font-family:var(--font-mono);font-size:0.82rem;color:var(--cyan);font-weight:500}
+.sig-price,.sig-rr{font-family:var(--font-mono);font-size:0.78rem;color:var(--text)}
+.sig-tag{display:inline-block;font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.2rem 0.5rem;background:rgba(29,221,138,0.08);color:var(--green);border:1px solid rgba(29,221,138,0.25)}
+
+/* checklist */
+.checklist{display:flex;flex-direction:column;gap:0.7rem}
+.ck-item{display:flex;align-items:flex-start;gap:1rem;padding:1.1rem 1.4rem;border:1px solid var(--border);background:var(--card);transition:border-color 0.2s}
+.ck-item:hover{border-color:rgba(0,229,200,0.25)}
+.ck-dot{width:7px;height:7px;flex-shrink:0;margin-top:0.3rem}
+.ck-dot-g{background:var(--green)}
+.ck-dot-y{background:var(--gold)}
+.ck-dot-r{background:var(--red)}
+.ck-body{font-size:0.83rem;line-height:1.65;color:var(--text)}
+.ck-body strong{color:var(--white);font-weight:500}
+
+/* ─── DASHBOARD PREVIEW ─── */
+#dashboard{background:var(--dark)}
+.dash-wrap{border:1px solid var(--border);overflow:hidden}
+.dash-topbar{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;background:var(--black);border-bottom:1px solid var(--border)}
+.dash-title{font-family:var(--font-mono);font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted)}
+.dash-status{display:flex;align-items:center;gap:0.5rem;font-family:var(--font-mono);font-size:0.65rem;color:var(--green)}
+.dash-status::before{content:'';width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}
+.dash-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border)}
+.dash-metric{background:var(--card);padding:1.5rem 1.8rem}
+.dash-metric-label{font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:0.4rem}
+.dash-metric-value{font-family:var(--font-display);font-weight:700;font-size:1.6rem;color:var(--white);letter-spacing:-0.04em}
+.dash-metric-value.green{color:var(--green)}
+.dash-metric-value.red{color:var(--red)}
+.dash-metric-sub{font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);margin-top:0.2rem}
+
+/* market bar */
+.market-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border)}
+.market-item{background:var(--card2);padding:1.2rem 1.5rem}
+.mi-label{font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:0.3rem}
+.mi-value{font-family:var(--font-display);font-weight:700;font-size:1.1rem;color:var(--white);letter-spacing:-0.03em}
+.mi-chg{font-family:var(--font-mono);font-size:0.65rem;margin-top:0.15rem}
+
+/* ─── PRICING ─── */
+#pricing{background:var(--black)}
+.price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border)}
+.p-card{background:var(--card);padding:2.8rem 2.2rem;position:relative;transition:background 0.3s}
+.p-card:hover{background:var(--card2)}
+.p-card.hot{background:rgba(0,229,200,0.04)}
+.p-card.hot::before{content:'POPULAR';position:absolute;top:1.2rem;right:1.2rem;font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.15em;color:var(--cyan);border:1px solid rgba(0,229,200,0.35);padding:0.2rem 0.55rem}
+.p-plan{font-family:var(--font-mono);font-size:0.64rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:1.2rem}
+.p-price{font-family:var(--font-display);font-weight:800;font-size:2.8rem;color:var(--white);letter-spacing:-0.06em;line-height:1;margin-bottom:0.4rem}
+.p-price .sym{font-size:1.4rem;color:var(--cyan);vertical-align:top;margin-top:0.3rem;display:inline-block}
+.p-price .per{font-family:var(--font-body);font-size:0.85rem;color:var(--muted);font-weight:300;letter-spacing:0}
+.p-desc{font-size:0.8rem;color:var(--muted);line-height:1.65;margin-bottom:2rem;min-height:2.4rem}
+.p-list{list-style:none;display:flex;flex-direction:column;gap:0.65rem;margin-bottom:2.2rem}
+.p-list li{font-size:0.82rem;color:var(--text);display:flex;gap:0.6rem;align-items:flex-start;line-height:1.5}
+.p-list li::before{content:'→';color:var(--cyan);font-family:var(--font-mono);font-size:0.72rem;flex-shrink:0;margin-top:0.05rem}
+.p-btn{width:100%;padding:0.9rem;font-family:var(--font-mono);font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;border:1px solid var(--border2);background:transparent;color:var(--text);cursor:pointer;transition:all 0.2s}
+.p-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.p-btn-hot{background:var(--cyan);border-color:var(--cyan);color:var(--black);font-weight:500}
+.p-btn-hot:hover{background:var(--green);border-color:var(--green)}
+
+/* ─── ROADMAP ─── */
+#roadmap{background:var(--dark)}
+.road-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-top:3.5rem}
+.road-card{background:var(--card);padding:2.8rem}
+.road-phase{font-family:var(--font-mono);font-size:0.62rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:0.5rem}
+.road-title{font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--white);margin-bottom:0.3rem;letter-spacing:-0.02em}
+.road-time{font-family:var(--font-mono);font-size:0.68rem;color:var(--cyan);letter-spacing:0.06em;margin-bottom:2rem}
+.road-list{list-style:none;display:flex;flex-direction:column;gap:0.65rem}
+.road-list li{font-size:0.83rem;color:var(--text);display:flex;gap:0.7rem;align-items:flex-start;line-height:1.5}
+.road-list li .d{width:5px;height:5px;background:var(--cyan);border-radius:50%;flex-shrink:0;margin-top:0.45rem}
+.road-status{display:inline-block;margin-top:1.8rem;font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.15em;text-transform:uppercase;padding:0.25rem 0.7rem;border:1px solid}
+.rs-active{border-color:rgba(29,221,138,0.5);color:var(--green)}
+.rs-next{border-color:rgba(245,192,24,0.4);color:var(--gold)}
+.rs-plan{border-color:var(--border2);color:var(--muted)}
+
+/* ─── CTA ─── */
+#cta-sec{background:var(--black);text-align:center;padding:10rem 4rem;position:relative;overflow:hidden}
+#cta-sec::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:800px;height:400px;background:radial-gradient(ellipse,rgba(0,229,200,0.07) 0%,transparent 65%);pointer-events:none}
+#cta-sec h2{margin:0 auto 1.5rem;max-width:700px}
+#cta-sec p{color:var(--muted);font-size:1rem;margin-bottom:3.5rem;line-height:1.8;max-width:500px;margin-left:auto;margin-right:auto}
+.cta-actions{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+
+/* ─── FOOTER ─── */
+footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-template-columns:1fr 1fr 1fr;gap:2rem;align-items:center}
+.f-logo{font-family:var(--font-display);font-weight:800;font-size:1.15rem;color:var(--white)}
+.f-logo em{font-style:normal;color:var(--cyan)}
+.f-tagline{font-family:var(--font-mono);font-size:0.62rem;letter-spacing:0.1em;color:var(--muted);margin-top:0.4rem}
+.f-links{display:flex;gap:2rem;justify-content:center;list-style:none;flex-wrap:wrap}
+.f-links a{font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);text-decoration:none;letter-spacing:0.1em;text-transform:uppercase;transition:color 0.2s}
+.f-links a:hover{color:var(--cyan)}
+.f-right{text-align:right}
+.f-copy{font-family:var(--font-mono);font-size:0.6rem;color:var(--muted);letter-spacing:0.05em;line-height:1.8}
+.f-disclaimer{font-family:var(--font-mono);font-size:0.58rem;color:var(--border2);margin-top:0.4rem;letter-spacing:0.03em}
+
+/* ─── DASHBOARD APP OVERLAY ─── */
+#app{display:none;position:fixed;inset:0;background:var(--black);z-index:800;overflow-y:auto}
+#app.open{display:block}
+.app-nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 2rem;background:var(--dark);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
+.app-logo{font-family:var(--font-display);font-weight:800;font-size:1.1rem;color:var(--white)}
+.app-logo em{font-style:normal;color:var(--cyan)}
+.app-tabs{display:flex;gap:0}
+.app-tab{font-family:var(--font-mono);font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.6rem 1.2rem;background:transparent;border:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s}
+.app-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.app-close{font-family:var(--font-mono);font-size:0.68rem;color:var(--muted);background:transparent;border:1px solid var(--border);padding:0.4rem 0.8rem;cursor:pointer;letter-spacing:0.1em;text-transform:uppercase;transition:all 0.2s}
+.app-close:hover{border-color:var(--red);color:var(--red)}
+.app-body{padding:2rem;max-width:1400px;margin:0 auto}
+
+/* app cards */
+.app-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
+.app-card{background:var(--card);border:1px solid var(--border);padding:1.5rem}
+.app-card-label{font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:0.5rem}
+.app-card-val{font-family:var(--font-display);font-weight:700;font-size:1.8rem;color:var(--white);letter-spacing:-0.04em}
+.app-card-val.g{color:var(--green)}
+.app-card-val.r{color:var(--red)}
+.app-card-val.c{color:var(--cyan)}
+.app-card-sub{font-family:var(--font-mono);font-size:0.62rem;color:var(--muted);margin-top:0.3rem}
+
+/* app signal table */
+.app-table{background:var(--card);border:1px solid var(--border);overflow:hidden;margin-bottom:1.5rem}
+.app-table-head{display:grid;grid-template-columns:1.5fr 0.7fr 0.9fr 0.9fr 0.9fr 0.7fr 0.9fr 1.2fr;padding:0.8rem 1.2rem;background:var(--dark);border-bottom:1px solid var(--border)}
+.app-table-head span{font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted)}
+.app-row{display:grid;grid-template-columns:1.5fr 0.7fr 0.9fr 0.9fr 0.9fr 0.7fr 0.9fr 1.2fr;padding:1rem 1.2rem;border-bottom:1px solid var(--border);align-items:center;transition:background 0.2s}
+.app-row:hover{background:rgba(0,229,200,0.03)}
+.app-row:last-child{border-bottom:none}
+.ar-stock{font-family:var(--font-display);font-weight:700;font-size:0.9rem;color:var(--white)}
+.ar-score{font-family:var(--font-mono);font-size:0.78rem;color:var(--cyan)}
+.ar-val{font-family:var(--font-mono);font-size:0.75rem;color:var(--text)}
+.ar-btn{font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;padding:0.3rem 0.7rem;background:rgba(0,229,200,0.08);border:1px solid rgba(0,229,200,0.25);color:var(--cyan);cursor:pointer;transition:all 0.2s}
+.ar-btn:hover{background:rgba(0,229,200,0.15)}
+
+/* scan button */
+.scan-btn{display:flex;align-items:center;gap:0.8rem;background:var(--cyan);color:var(--black);font-family:var(--font-display);font-weight:700;font-size:0.88rem;padding:0.9rem 2rem;border:none;cursor:pointer;transition:all 0.2s;margin-bottom:1.5rem}
+.scan-btn:hover{background:var(--green)}
+.scan-btn:disabled{background:var(--muted);cursor:not-allowed}
+.scan-loader{width:14px;height:14px;border:2px solid rgba(0,0,0,0.3);border-top-color:var(--black);border-radius:50%;animation:spin 0.6s linear infinite;display:none}
+.scan-loader.show{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─── ANIMATIONS ─── */
+.reveal{opacity:0;transform:translateY(28px);transition:opacity 0.75s ease,transform 0.75s ease}
+.reveal.on{opacity:1;transform:none}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:1024px){
+  nav{padding:1rem 1.5rem}
+  .nav-links{display:none}
+  section{padding:5rem 1.5rem}
+  #hero{padding:7rem 1.5rem 4rem}
+  .stats-row{grid-template-columns:repeat(2,1fr)}
+  .scanner-grid{grid-template-columns:repeat(2,1fr)}
+  .sig-layout{grid-template-columns:1fr}
+  .price-grid{grid-template-columns:repeat(2,1fr)}
+  .road-grid{grid-template-columns:1fr}
+  footer{grid-template-columns:1fr;text-align:center}
+  .f-right{text-align:center}
+  .f-links{justify-content:center}
+  .app-grid{grid-template-columns:repeat(2,1fr)}
+  .app-table-head,.app-row{grid-template-columns:1.5fr 0.7fr 1fr 1fr 0.8fr 1.2fr;font-size:0.7rem}
+  .app-table-head span:nth-child(4),
+  .app-row>*:nth-child(4),
+  .app-table-head span:nth-child(5),
+  .app-row>*:nth-child(5){display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+
+<!-- ═══════════ NAV ═══════════ -->
+<nav id="nav">
+  <a href="#" class="logo">TAKSHVI<em>.</em>TRADE</a>
+  <ul class="nav-links">
+    <li><a href="#scanners">Scanners</a></li>
+    <li><a href="#signals-sec">Signals</a></li>
+    <li><a href="#dashboard">Dashboard</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+  </ul>
+  <div class="nav-right">
+    <a href="#" class="btn-nav" onclick="openApp()">Log In</a>
+    <a href="#pricing" class="btn-nav btn-nav-solid">Start Free</a>
+  </div>
+</nav>
+
+<!-- ═══════════ HERO ═══════════ -->
+<section id="hero">
+  <div class="hero-mesh"></div>
+  <div class="hero-grid"></div>
+
+  <div class="nifty-badge" id="nifty-badge">
+    <div class="nifty-dot dot-red" id="nifty-dot"></div>
+    <span class="nifty-text">NIFTY50 <strong id="nifty-price">₹22,820</strong> · <span id="nifty-verdict">BEARISH — market caution</span></span>
+  </div>
+
+  <div class="eyebrow">NSE Swing Signal Intelligence · takshvitrade.com</div>
+  <h1>Trade with<br/><span class="accent">precision.</span></h1>
+  <p class="hero-body">ATR-adaptive stops. Multi-factor scoring. 6-point pre-approval. Groww-ready order sheets — all automated, every trading day.</p>
+
+  <div class="hero-actions">
+    <a href="#pricing" class="btn-primary">Start Free — ₹0</a>
+    <button class="btn-ghost" onclick="openApp()">Open Dashboard →</button>
+  </div>
+</section>
+
+<!-- ═══════════ TICKER ═══════════ -->
+<div class="ticker-wrap">
+  <div class="ticker-track" id="ticker"></div>
+</div>
+
+<!-- ═══════════ STATS ═══════════ -->
+<div class="stats-row">
+  <div class="stat reveal"><div class="stat-n">50<em>+</em></div><div class="stat-l">Stocks Scanned Daily</div></div>
+  <div class="stat reveal"><div class="stat-n">2<em>:1</em></div><div class="stat-l">Minimum RR Ratio</div></div>
+  <div class="stat reveal"><div class="stat-n">6</div><div class="stat-l">Pre-Approval Checks</div></div>
+  <div class="stat reveal"><div class="stat-n">₹<em>0</em></div><div class="stat-l">To Get Started</div></div>
+</div>
+
+<!-- ═══════════ SCANNERS ═══════════ -->
+<section id="scanners">
+  <div class="sec-tag">What We Scan</div>
+  <h2>Six scanners.<br/>One platform.</h2>
+  <p class="sec-lead">Each scanner is purpose-built for Indian markets — NSE data, INR pricing, Groww-compatible output.</p>
+  <div class="scanner-grid reveal">
+    <div class="sc-card"><span class="sc-icon">📈</span><div class="sc-title">Swing Scanner</div><div class="sc-desc">EMA stack + RSI + volume + 52W high proximity. ATR-based stops that adapt to each stock's volatility. Scores 0–100 with multi-factor engine.</div><span class="badge badge-live">● Live</span></div>
+    <div class="sc-card"><span class="sc-icon">⚡</span><div class="sc-title">Intraday Scanner</div><div class="sc-desc">5-min OHLCV candles, VWAP deviation signals, RSI momentum bursts. Built for 9:15–3:30 PM execution on NSE.</div><span class="badge badge-soon">Coming Phase 3</span></div>
+    <div class="sc-card"><span class="sc-icon">📊</span><div class="sc-title">F&O Signals</div><div class="sc-desc">Open interest buildup, Put-Call ratio, IV rank. Spot high-conviction options setups before the crowd does.</div><span class="badge badge-soon">Coming Phase 3</span></div>
+    <div class="sc-card"><span class="sc-icon">₿</span><div class="sc-title">Crypto Scanner</div><div class="sc-desc">Binance API — no key needed. Same multi-factor scoring on top crypto pairs. Scans 24/7, alerts via WhatsApp.</div><span class="badge badge-soon">Coming Phase 3</span></div>
+    <div class="sc-card"><span class="sc-icon">🏭</span><div class="sc-title">Sector Scanner</div><div class="sc-desc">Group stocks by NSE sector, rank by ATR momentum. Rotate capital into the strongest sector before the move.</div><span class="badge badge-soon">Coming Phase 3</span></div>
+    <div class="sc-card"><span class="sc-icon">💰</span><div class="sc-title">Dividend Tracker</div><div class="sc-desc">Yield, ex-date, payout history across NIFTY500. Never miss a high-yield ex-date again.</div><span class="badge badge-soon">Coming Phase 3</span></div>
+  </div>
+</section>
+
+<!-- ═══════════ SIGNALS ═══════════ -->
+<section id="signals-sec">
+  <div class="sec-tag">Signal Output</div>
+  <h2>Pre-approval.<br/>Every trade.</h2>
+  <p class="sec-lead">Before any order is generated, each candidate passes 6 checkpoints. No black boxes, no guesswork.</p>
+  <div class="sig-layout">
+    <div class="sig-table reveal">
+      <div class="sig-thead"><span>Stock</span><span>Score</span><span>Entry ₹</span><span>RR</span><span>Signal</span></div>
+      <div class="sig-row"><div class="sig-stock">RELIANCE</div><div class="sig-score">84</div><div class="sig-price">2,891</div><div class="sig-rr">2.4x</div><div><span class="sig-tag">Buy</span></div></div>
+      <div class="sig-row"><div class="sig-stock">TCS</div><div class="sig-score">79</div><div class="sig-price">3,512</div><div class="sig-rr">2.1x</div><div><span class="sig-tag">Buy</span></div></div>
+      <div class="sig-row"><div class="sig-stock">HDFCBANK</div><div class="sig-score">76</div><div class="sig-price">1,688</div><div class="sig-rr">2.0x</div><div><span class="sig-tag">Buy</span></div></div>
+      <div class="sig-row"><div class="sig-stock">TITAN</div><div class="sig-score">71</div><div class="sig-price">3,241</div><div class="sig-rr">2.2x</div><div><span class="sig-tag">Buy</span></div></div>
+      <div class="sig-row"><div class="sig-stock">INFY</div><div class="sig-score">68</div><div class="sig-price">1,492</div><div class="sig-rr">2.0x</div><div><span class="sig-tag">Buy</span></div></div>
+    </div>
+    <div class="checklist reveal">
+      <div class="ck-item"><div class="ck-dot ck-dot-g"></div><div class="ck-body"><strong>EMA 20 &gt; 50 &gt; 200</strong> — Full bullish stack confirms the primary trend is up across all timeframes.</div></div>
+      <div class="ck-item"><div class="ck-dot ck-dot-g"></div><div class="ck-body"><strong>EMA 20 Rising</strong> — 3-candle confirmation. Short-term momentum is accelerating, not just flat.</div></div>
+      <div class="ck-item"><div class="ck-dot ck-dot-y"></div><div class="ck-body"><strong>RSI 50–70</strong> — Strong but not overbought. The ideal zone for trend continuation entries.</div></div>
+      <div class="ck-item"><div class="ck-dot ck-dot-g"></div><div class="ck-body"><strong>Volume &gt; 10-Day SMA</strong> — Institutional participation confirmed. Thin-volume moves are traps.</div></div>
+      <div class="ck-item"><div class="ck-dot ck-dot-g"></div><div class="ck-body"><strong>Candle: Bullish or Neutral</strong> — No bearish engulfing or shooting star at entry candle.</div></div>
+      <div class="ck-item"><div class="ck-dot ck-dot-r"></div><div class="ck-body"><strong>Pullback to EMA20</strong> — Low touched EMA20, close above it. The classic institutional bounce setup.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DASHBOARD PREVIEW ═══════════ -->
+<section id="dashboard">
+  <div class="sec-tag">Live Dashboard</div>
+  <h2>Everything in<br/>one view.</h2>
+  <p class="sec-lead">Real-time signal table, market status, capital allocation, and Groww order sheets — refreshed every 15 minutes.</p>
+  <div class="dash-wrap reveal">
+    <div class="dash-topbar">
+      <span class="dash-title">Takshvi Trade · Dashboard</span>
+      <span class="dash-status">Live · Last scan 14:32 IST</span>
+    </div>
+    <div class="dash-grid">
+      <div class="dash-metric"><div class="dash-metric-label">Capital Deployed</div><div class="dash-metric-value green">₹48,240</div><div class="dash-metric-sub">of ₹1,00,000 available</div></div>
+      <div class="dash-metric"><div class="dash-metric-label">Signals Today</div><div class="dash-metric-value c">5</div><div class="dash-metric-sub">3 approved · 2 pending</div></div>
+      <div class="dash-metric"><div class="dash-metric-label">Avg Score</div><div class="dash-metric-value">76</div><div class="dash-metric-sub">out of 100 possible</div></div>
+    </div>
+    <div class="market-bar">
+      <div class="market-item"><div class="mi-label">NIFTY50</div><div class="mi-value">22,820</div><div class="mi-chg" style="color:var(--red)">▼ −0.6%</div></div>
+      <div class="market-item"><div class="mi-label">Market Status</div><div class="mi-value" style="color:var(--red);font-size:0.9rem">BEARISH</div><div class="mi-chg">Below EMA50 & EMA200</div></div>
+      <div class="market-item"><div class="mi-label">NIFTY RSI</div><div class="mi-value">35.6</div><div class="mi-chg" style="color:var(--gold)">⚠ Caution zone</div></div>
+      <div class="market-item"><div class="mi-label">News Sentiment</div><div class="mi-value" style="color:var(--gold);font-size:0.9rem">MIXED</div><div class="mi-chg">Top score trades only</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ PRICING ═══════════ -->
+<section id="pricing">
+  <div class="sec-tag">Subscription Plans</div>
+  <h2>Start free.<br/>Scale when ready.</h2>
+  <p class="sec-lead">No credit card to start. Razorpay for India, Stripe for international.</p>
+  <div class="price-grid reveal">
+    <div class="p-card">
+      <div class="p-plan">Free</div>
+      <div class="p-price"><span class="sym">₹</span>0</div>
+      <div class="p-desc">3 signals/day · swing only · 15-min delay</div>
+      <ul class="p-list"><li>Swing scanner access</li><li>3 signals per day</li><li>15-minute delay</li><li>Dashboard view</li></ul>
+      <button class="p-btn" onclick="openApp()">Get Started</button>
+    </div>
+    <div class="p-card hot">
+      <div class="p-plan">Basic</div>
+      <div class="p-price"><span class="sym">₹</span>299<span class="per">/mo</span></div>
+      <div class="p-desc">All swing + intraday · WhatsApp alerts</div>
+      <ul class="p-list"><li>Unlimited swing signals</li><li>Intraday scanner</li><li>Real-time alerts</li><li>WhatsApp via Twilio</li><li>Groww order sheets</li></ul>
+      <button class="p-btn p-btn-hot">Subscribe — Razorpay</button>
+    </div>
+    <div class="p-card">
+      <div class="p-plan">Pro</div>
+      <div class="p-price"><span class="sym">₹</span>799<span class="per">/mo</span></div>
+      <div class="p-desc">F&O + crypto + sector + dividend</div>
+      <ul class="p-list"><li>Everything in Basic</li><li>F&O signals</li><li>Crypto scanner (Binance)</li><li>Sector rotation alerts</li><li>Dividend tracker</li></ul>
+      <button class="p-btn">Upgrade to Pro</button>
+    </div>
+    <div class="p-card">
+      <div class="p-plan">Elite</div>
+      <div class="p-price"><span class="sym">₹</span>1,999<span class="per">/mo</span></div>
+      <div class="p-desc">API access + custom alerts + priority</div>
+      <ul class="p-list"><li>Everything in Pro</li><li>Full REST API access</li><li>Custom alert rules</li><li>Webhook integrations</li><li>Priority support</li></ul>
+      <button class="p-btn">Go Elite</button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ ROADMAP ═══════════ -->
+<section id="roadmap">
+  <div class="sec-tag">Build Roadmap</div>
+  <h2>Where we are.<br/>Where we're going.</h2>
+  <div class="road-grid reveal">
+    <div class="road-card">
+      <div class="road-phase">Phase 01</div>
+      <div class="road-title">Build Free, Launch Fast</div>
+      <div class="road-time">Month 1–2</div>
+      <ul class="road-list">
+        <li><span class="d"></span>Swing scanner (live)</li>
+        <li><span class="d"></span>FastAPI backend</li>
+        <li><span class="d"></span>React + Next.js dashboard</li>
+        <li><span class="d"></span>Supabase DB + JWT auth</li>
+        <li><span class="d"></span>WhatsApp via Twilio</li>
+        <li><span class="d"></span>TradingView charts</li>
+      </ul>
+      <span class="road-status rs-active">● In Progress</span>
+    </div>
+    <div class="road-card">
+      <div class="road-phase">Phase 02</div>
+      <div class="road-title">Mobile App</div>
+      <div class="road-time">Month 3–4</div>
+      <ul class="road-list">
+        <li><span class="d"></span>React Native app</li>
+        <li><span class="d"></span>70% code shared with web</li>
+        <li><span class="d"></span>Firebase push notifications</li>
+        <li><span class="d"></span>Biometric login</li>
+        <li><span class="d"></span>Offline cached signals</li>
+        <li><span class="d"></span>Play Store ($25 one-time)</li>
+      </ul>
+      <span class="road-status rs-next">◎ Next Up</span>
+    </div>
+    <div class="road-card">
+      <div class="road-phase">Phase 03</div>
+      <div class="road-title">Revenue & Scale</div>
+      <div class="road-time">Month 5+</div>
+      <ul class="road-list">
+        <li><span class="d"></span>Razorpay integration</li>
+        <li><span class="d"></span>Stripe international</li>
+        <li><span class="d"></span>F&O + crypto scanners</li>
+        <li><span class="d"></span>Sector + dividend trackers</li>
+        <li><span class="d"></span>Full API tier for devs</li>
+        <li><span class="d"></span>Webhook subscription mgmt</li>
+      </ul>
+      <span class="road-status rs-plan">○ Planned</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ CTA ═══════════ -->
+<section id="cta-sec">
+  <div class="sec-tag" style="justify-content:center">Ready?</div>
+  <h2>Your first 3 signals<br/>are free. Always.</h2>
+  <p>No credit card. No lock-in. Just data-driven swing trades backed by ATR volatility and a 6-point pre-approval system.</p>
+  <div class="cta-actions">
+    <button class="btn-primary" onclick="openApp()">Open Dashboard — Free</button>
+    <a href="#scanners" class="btn-ghost">Explore Scanners</a>
+  </div>
+</section>
+
+<!-- ═══════════ FOOTER ═══════════ -->
+<footer>
+  <div>
+    <div class="f-logo">TAKSHVI<em>.</em>TRADE</div>
+    <div class="f-tagline">takshvitrade.com · takshvitrade.in</div>
+  </div>
+  <ul class="f-links">
+    <li><a href="#scanners">Scanners</a></li>
+    <li><a href="#signals-sec">Signals</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+    <li><a href="#">Privacy</a></li>
+    <li><a href="#">Terms</a></li>
+  </ul>
+  <div class="f-right">
+    <div class="f-copy">© 2026 Takshvi Trade. All rights reserved.</div>
+    <div class="f-disclaimer">NSE data via yfinance. Not SEBI registered. Trade at your own risk.</div>
+  </div>
+</footer>
+
+<!-- ═══════════ DASHBOARD APP ═══════════ -->
+<div id="app">
+  <div class="app-nav">
+    <div class="app-logo">TAKSHVI<em>.</em>TRADE</div>
+    <div class="app-tabs">
+      <button class="app-tab active" onclick="showTab('signals')">Signals</button>
+      <button class="app-tab" onclick="showTab('market')">Market</button>
+      <button class="app-tab" onclick="showTab('groww')">Groww Sheet</button>
+      <button class="app-tab" onclick="showTab('news')">News</button>
+    </div>
+    <button class="app-close" onclick="closeApp()">✕ Close</button>
+  </div>
+
+  <div class="app-body">
+
+    <!-- Signals Tab -->
+    <div id="tab-signals">
+      <div class="app-grid">
+        <div class="app-card"><div class="app-card-label">Capital</div><div class="app-card-val c">₹1,00,000</div><div class="app-card-sub">Available</div></div>
+        <div class="app-card"><div class="app-card-label">Deployed</div><div class="app-card-val">₹48,240</div><div class="app-card-sub">Across 5 trades</div></div>
+        <div class="app-card"><div class="app-card-label">Signals Found</div><div class="app-card-val g" id="sig-count">—</div><div class="app-card-sub">Passed all filters</div></div>
+        <div class="app-card"><div class="app-card-label">Market</div><div class="app-card-val r">BEARISH</div><div class="app-card-sub">Caution — NIFTY below EMA</div></div>
+      </div>
+      <button class="scan-btn" id="scan-btn" onclick="runScan()">
+        <div class="scan-loader" id="scan-loader"></div>
+        <span id="scan-label">▶ Run Scanner (Demo)</span>
+      </button>
+      <div class="app-table">
+        <div class="app-table-head">
+          <span>Stock</span><span>Score</span><span>Entry ₹</span><span>SL ₹</span><span>Target ₹</span><span>RR</span><span>Qty</span><span>Action</span>
+        </div>
+        <div id="signals-body">
+          <div class="app-row">
+            <div class="ar-stock">RELIANCE</div><div class="ar-score">84</div><div class="ar-val">2,891</div><div class="ar-val">2,784</div><div class="ar-val">3,105</div><div class="ar-val">2.4x</div><div class="ar-val">18</div>
+            <button class="ar-btn" onclick="showGroww('RELIANCE',2891,2784,3105,18)">Groww →</button>
+          </div>
+          <div class="app-row">
+            <div class="ar-stock">TCS</div><div class="ar-score">79</div><div class="ar-val">3,512</div><div class="ar-val">3,380</div><div class="ar-val">3,776</div><div class="ar-val">2.1x</div><div class="ar-val">15</div>
+            <button class="ar-btn" onclick="showGroww('TCS',3512,3380,3776,15)">Groww →</button>
+          </div>
+          <div class="app-row">
+            <div class="ar-stock">HDFCBANK</div><div class="ar-score">76</div><div class="ar-val">1,688</div><div class="ar-val">1,622</div><div class="ar-val">1,820</div><div class="ar-val">2.0x</div><div class="ar-val">30</div>
+            <button class="ar-btn" onclick="showGroww('HDFCBANK',1688,1622,1820,30)">Groww →</button>
+          </div>
+          <div class="app-row">
+            <div class="ar-stock">TITAN</div><div class="ar-score">71</div><div class="ar-val">3,241</div><div class="ar-val">3,118</div><div class="ar-val">3,487</div><div class="ar-val">2.2x</div><div class="ar-val">16</div>
+            <button class="ar-btn" onclick="showGroww('TITAN',3241,3118,3487,16)">Groww →</button>
+          </div>
+          <div class="app-row">
+            <div class="ar-stock">INFY</div><div class="ar-score">68</div><div class="ar-val">1,492</div><div class="ar-val">1,433</div><div class="ar-val">1,610</div><div class="ar-val">2.0x</div><div class="ar-val">33</div>
+            <button class="ar-btn" onclick="showGroww('INFY',1492,1433,1610,33)">Groww →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Market Tab -->
+    <div id="tab-market" style="display:none">
+      <div class="app-grid">
+        <div class="app-card"><div class="app-card-label">NIFTY50 Price</div><div class="app-card-val r">₹22,820</div><div class="app-card-sub">As of last close</div></div>
+        <div class="app-card"><div class="app-card-label">EMA 50</div><div class="app-card-val">₹24,565</div><div class="app-card-sub" style="color:var(--red)">Price below ❌</div></div>
+        <div class="app-card"><div class="app-card-label">EMA 200</div><div class="app-card-val">₹25,000</div><div class="app-card-sub" style="color:var(--red)">Price below ❌</div></div>
+        <div class="app-card"><div class="app-card-label">RSI (14)</div><div class="app-card-val" style="color:var(--gold)">35.6</div><div class="app-card-sub">Approaching oversold</div></div>
+      </div>
+      <div class="app-table" style="padding:2rem">
+        <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);margin-bottom:1rem">MARKET VERDICT</div>
+        <div style="font-family:var(--font-display);font-weight:700;font-size:2rem;color:var(--red);letter-spacing:-0.04em">❌ BEARISH</div>
+        <div style="font-family:var(--font-mono);font-size:0.8rem;color:var(--text);margin-top:1rem;line-height:1.8">
+          NIFTY is trading <strong style="color:var(--red)">₹1,745 (7.1%)</strong> below EMA50 and <strong style="color:var(--red)">₹2,180 (8.7%)</strong> below EMA200.<br/>
+          RSI at 35.6 indicates weak momentum approaching oversold territory.<br/><br/>
+          <strong style="color:var(--gold)">Recommendation:</strong> Skip trading today. Wait for price to reclaim EMA50 and RSI to cross 50.
+        </div>
+      </div>
+    </div>
+
+    <!-- Groww Tab -->
+    <div id="tab-groww" style="display:none">
+      <div id="groww-content">
+        <div class="app-table" style="padding:2rem">
+          <div style="font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--white);margin-bottom:0.5rem">📱 Groww Order Sheet</div>
+          <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);margin-bottom:1.5rem">Click "Groww →" on any signal row to generate step-by-step Groww instructions</div>
+          <div style="font-family:var(--font-mono);font-size:0.8rem;color:var(--cyan)">← Select a signal from the Signals tab first</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- News Tab -->
+    <div id="tab-news" style="display:none">
+      <div class="app-table" style="padding:2rem">
+        <div style="font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--white);margin-bottom:1.5rem">📰 Market News Sentiment</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+          <div class="app-card"><div class="app-card-label">Positive Signals</div><div class="app-card-val g">4</div></div>
+          <div class="app-card"><div class="app-card-label">Negative Signals</div><div class="app-card-val r">7</div></div>
+          <div class="app-card"><div class="app-card-label">Verdict</div><div class="app-card-val" style="font-size:1.1rem;color:var(--gold)">MIXED</div></div>
+        </div>
+        <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--muted);line-height:2">
+          Sources: Economic Times Markets · Moneycontrol · Reuters Business · Mint Markets<br/>
+          Recommendation: <span style="color:var(--gold)">Stick to highest-score trades only</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ─── Cursor ─── */
+const cur = document.getElementById('cursor');
+const ring = document.getElementById('cursor-ring');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{
+  mx=e.clientX; my=e.clientY;
+  cur.style.left=(mx-4)+'px'; cur.style.top=(my-4)+'px';
+});
+function animRing(){
+  rx+=(mx-rx)*0.12; ry+=(my-ry)*0.12;
+  ring.style.left=(rx-16)+'px'; ring.style.top=(ry-16)+'px';
+  requestAnimationFrame(animRing);
+}
+animRing();
+document.querySelectorAll('a,button').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{cur.style.transform='scale(2.5)';ring.style.transform='scale(1.5)'});
+  el.addEventListener('mouseleave',()=>{cur.style.transform='scale(1)';ring.style.transform='scale(1)'});
+});
+
+/* ─── Ticker ─── */
+const tickers=[
+  {n:'RELIANCE',p:'₹2,891',c:'+1.2%',u:true},{n:'TCS',p:'₹3,512',c:'+0.8%',u:true},
+  {n:'HDFCBANK',p:'₹1,688',c:'-0.4%',u:false},{n:'INFY',p:'₹1,492',c:'+2.1%',u:true},
+  {n:'ICICIBANK',p:'₹1,124',c:'+0.6%',u:true},{n:'SBIN',p:'₹782',c:'-1.1%',u:false},
+  {n:'TITAN',p:'₹3,241',c:'+1.8%',u:true},{n:'MARUTI',p:'₹12,340',c:'-0.3%',u:false},
+  {n:'WIPRO',p:'₹481',c:'+0.9%',u:true},{n:'BAJFINANCE',p:'₹6,892',c:'+1.4%',u:true},
+  {n:'NIFTY50',p:'₹22,820',c:'-0.6%',u:false},{n:'ADANIENT',p:'₹2,210',c:'+0.4%',u:true},
+  {n:'LT',p:'₹3,480',c:'-0.2%',u:false},{n:'SUNPHARMA',p:'₹1,640',c:'+1.1%',u:true},
+];
+const track=document.getElementById('ticker');
+track.innerHTML=[...tickers,...tickers].map(t=>`
+  <div class="ticker-item">
+    <span class="t-name">${t.n}</span>
+    <span class="t-price">${t.p}</span>
+    <span class="${t.u?'t-up':'t-dn'}">${t.c}</span>
+  </div>`).join('');
+
+/* ─── Scroll effects ─── */
+const nav=document.getElementById('nav');
+window.addEventListener('scroll',()=>{
+  nav.classList.toggle('scrolled',window.scrollY>50);
+});
+const revealObs=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('on')});
+},{threshold:0.08});
+document.querySelectorAll('.reveal').forEach(el=>revealObs.observe(el));
+
+/* ─── App open/close ─── */
+function openApp(){
+  document.getElementById('app').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeApp(){
+  document.getElementById('app').classList.remove('open');
+  document.body.style.overflow='';
+}
+
+/* ─── Tabs ─── */
+function showTab(name){
+  ['signals','market','groww','news'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display = t===name?'block':'none';
+  });
+  document.querySelectorAll('.app-tab').forEach((btn,i)=>{
+    btn.classList.toggle('active',['signals','market','groww','news'][i]===name);
+  });
+}
+
+/* ─── Scanner demo ─── */
+function runScan(){
+  const btn=document.getElementById('scan-btn');
+  const loader=document.getElementById('scan-loader');
+  const label=document.getElementById('scan-label');
+  btn.disabled=true; loader.classList.add('show'); label.textContent='Scanning 50 stocks...';
+  setTimeout(()=>{
+    loader.classList.remove('show');
+    label.textContent='▶ Run Scanner (Demo)';
+    btn.disabled=false;
+    document.getElementById('sig-count').textContent='5';
+    document.getElementById('sig-count').className='app-card-val g';
+  },3000);
+}
+
+/* ─── Groww sheet generator ─── */
+function showGroww(stock,entry,sl,target,qty){
+  showTab('groww');
+  const risk=((entry-sl)*qty).toFixed(0);
+  const upside=(((target-entry)/entry)*100).toFixed(1);
+  document.getElementById('groww-content').innerHTML=`
+    <div class="app-table" style="padding:2rem">
+      <div style="font-family:var(--font-display);font-weight:700;font-size:1.3rem;color:var(--white);margin-bottom:0.3rem">📱 Groww Order — ${stock}</div>
+      <div style="font-family:var(--font-mono);font-size:0.65rem;color:var(--cyan);margin-bottom:2rem;letter-spacing:0.1em">PLACE AFTER 9:15 AM · LIMIT ORDERS ONLY · NSE · CNC</div>
+      <div style="display:flex;flex-direction:column;gap:1rem;font-family:var(--font-mono);font-size:0.82rem;color:var(--text);line-height:1.8">
+        <div><span style="color:var(--muted)">STEP 1</span> &nbsp; Search <strong style="color:var(--white)">'${stock}'</strong> in Groww app</div>
+        <div><span style="color:var(--muted)">STEP 2</span> &nbsp; Tap BUY → select <strong style="color:var(--white)">CNC</strong> (not MIS) → Order type: <strong style="color:var(--white)">LIMIT</strong></div>
+        <div style="background:var(--dark);padding:1rem;border:1px solid var(--border);margin:0.5rem 0">
+          &nbsp;&nbsp;Qty &nbsp;&nbsp;&nbsp;: <strong style="color:var(--cyan)">${qty} shares</strong><br/>
+          &nbsp;&nbsp;Price : <strong style="color:var(--cyan)">₹${entry}</strong><br/>
+          &nbsp;&nbsp;Total : <strong style="color:var(--white)">₹${(entry*qty).toLocaleString('en-IN')}</strong>
+        </div>
+        <div><span style="color:var(--muted)">STEP 3</span> &nbsp; After order fills → set <strong style="color:var(--white)">GTT (Good Till Triggered)</strong></div>
+        <div style="background:var(--dark);padding:1rem;border:1px solid var(--border);margin:0.5rem 0">
+          &nbsp;&nbsp;GTT Stop Loss : <strong style="color:var(--red)">₹${sl}</strong><br/>
+          &nbsp;&nbsp;GTT Target &nbsp;&nbsp;: <strong style="color:var(--green)">₹${target}</strong>
+        </div>
+        <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:0.5rem">
+          Max loss this trade: <strong style="color:var(--red)">₹${risk}</strong> &nbsp;|&nbsp; 
+          RR: <strong style="color:var(--cyan)">2:1</strong> &nbsp;|&nbsp; 
+          Upside: <strong style="color:var(--green)">${upside}%</strong>
+        </div>
+        <div style="color:var(--gold);font-size:0.72rem;border:1px solid rgba(245,192,24,0.3);padding:1rem;margin-top:0.5rem">
+          ⚠️ Only place order if stock opens ABOVE ₹${entry}<br/>
+          ⚠️ Skip if gap-up &gt; 2% at open<br/>
+          ⚠️ Set GTT immediately after fill<br/>
+          ⚠️ If NIFTY falls &gt;1% at 9:20 AM — pause all orders
+        </div>
+      </div>
+    </div>`;
+}
+</script>
+</body>
+</html>

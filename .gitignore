@@ -1,0 +1,44 @@
+# ============================================================
+# TakshviTrade .gitignore
+# These files are NEVER uploaded to GitHub
+# ============================================================
+
+# Secret credentials — NEVER commit these
+.env
+*.env
+.env.local
+.env.production
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+venv/
+env/
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Data files
+*.csv
+*.pkl
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node (for frontend later)
+node_modules/
+.next/
+out/
