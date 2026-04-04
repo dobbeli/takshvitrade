@@ -560,15 +560,21 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
         <div class="app-card"><div class="app-card-label">Signals Found</div><div class="app-card-val g" id="sig-count">—</div><div class="app-card-sub">Passed all filters</div></div>
         <div class="app-card"><div class="app-card-label">Market</div><div class="app-card-val r">BEARISH</div><div class="app-card-sub">Caution — NIFTY below EMA</div></div>
       </div>
+      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+        <label style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);letter-spacing:0.1em">CAPITAL (₹)</label>
+        <input id="capital-input" type="number" value="50000" min="10000" step="5000"
+          style="background:var(--card);border:1px solid var(--border2);color:var(--white);font-family:var(--font-mono);font-size:0.85rem;padding:0.6rem 1rem;width:160px;outline:none"/>
+      </div>
       <button class="scan-btn" id="scan-btn" onclick="runScan()">
         <div class="scan-loader" id="scan-loader"></div>
-        <span id="scan-label">▶ Run Scanner (Demo)</span>
+        <span id="scan-label">▶ Run Scanner</span>
       </button>
       <div class="app-table">
         <div class="app-table-head">
           <span>Stock</span><span>Score</span><span>Entry ₹</span><span>SL ₹</span><span>Target ₹</span><span>RR</span><span>Qty</span><span>Action</span>
         </div>
-        <div id="signals-body">
+        <table style="width:100%;border-collapse:collapse"><tbody id="signals-tbody"><tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted);font-family:var(--font-mono);font-size:0.75rem">Click Run Scanner to load live signals</td></tr></tbody></table>
+        <div id="signals-body" style="display:none">
           <div class="app-row">
             <div class="ar-stock">RELIANCE</div><div class="ar-score">84</div><div class="ar-val">2,891</div><div class="ar-val">2,784</div><div class="ar-val">3,105</div><div class="ar-val">2.4x</div><div class="ar-val">18</div>
             <button class="ar-btn" onclick="showGroww('RELIANCE',2891,2784,3105,18)">Groww →</button>
@@ -710,19 +716,84 @@ function showTab(name){
   });
 }
 
-/* ─── Scanner demo ─── */
-function runScan(){
-  const btn=document.getElementById('scan-btn');
-  const loader=document.getElementById('scan-loader');
-  const label=document.getElementById('scan-label');
-  btn.disabled=true; loader.classList.add('show'); label.textContent='Scanning 50 stocks...';
-  setTimeout(()=>{
+/* ─── API CONFIG ─── */
+const API = 'https://takshvitrade-api.onrender.com';
+
+/* ─── Real Scanner ─── */
+async function runScan(){
+  const btn    = document.getElementById('scan-btn');
+  const loader = document.getElementById('scan-loader');
+  const label  = document.getElementById('scan-label');
+  const capEl  = document.getElementById('capital-input');
+  const capital = capEl ? parseInt(capEl.value) || 50000 : 50000;
+
+  btn.disabled=true;
+  loader.classList.add('show');
+  label.textContent='Scanning stocks...';
+
+  try {
+    /* Step 1 — market status */
+    label.textContent='Checking market...';
+    const mRes  = await fetch(`${API}/api/signals/quick?capital=${capital}`);
+    const mData = await mRes.json();
+
+    /* Step 2 — update market card */
+    const bullish = mData.market?.bullish;
+    const niftyEl = document.getElementById('nifty-status');
+    if(niftyEl){
+      niftyEl.innerHTML = bullish
+        ? `<span class="nifty-dot dot-green"></span><span class="nifty-text">Market <strong>BULLISH</strong> — good for longs</span>`
+        : `<span class="nifty-dot dot-red"></span><span class="nifty-text">Market <strong>BEARISH</strong> — trade carefully</span>`;
+    }
+
+    /* Step 3 — update signal count */
+    const trades = mData.trades || [];
+    const sigCountEl = document.getElementById('sig-count');
+    if(sigCountEl){
+      sigCountEl.textContent = trades.length;
+      sigCountEl.className   = trades.length > 0 ? 'app-card-val g' : 'app-card-val r';
+    }
+
+    /* Step 4 — render signals table */
+    const tbody = document.getElementById('signals-tbody');
+    if(tbody){
+      if(trades.length === 0){
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted);font-family:var(--font-mono);font-size:0.75rem">
+          No trades passing filters today — market conditions weak. Check again after close.
+        </td></tr>`;
+      } else {
+        tbody.innerHTML = trades.map(t => `
+          <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="showGroww('${t.stock}',${t.entry},${t.stop_loss},${t.target},${t.qty})">
+            <td style="padding:0.9rem 1rem;font-family:var(--font-display);font-weight:700;color:var(--white)">${t.stock}</td>
+            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--cyan)">₹${t.entry}</td>
+            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--red)">₹${t.stop_loss}</td>
+            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--green)">₹${t.target}</td>
+            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--white)">${t.qty}</td>
+            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--white)">₹${t.position?.toLocaleString('en-IN')}</td>
+            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--gold)">${t.score}/100</td>
+            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.75rem;color:var(--cyan);text-decoration:underline">Groww →</td>
+          </tr>`).join('');
+      }
+    }
+
+    /* Step 5 — update summary cards */
+    const summary = mData.summary || {};
+    const deployEl = document.getElementById('capital-deployed');
+    if(deployEl) deployEl.textContent = `₹${(summary.total_deploy||0).toLocaleString('en-IN')}`;
+    const riskEl = document.getElementById('total-risk');
+    if(riskEl) riskEl.textContent = `₹${(summary.total_risk||0).toLocaleString('en-IN')}`;
+
+  } catch(err){
+    console.error('Scan error:', err);
+    const tbody = document.getElementById('signals-tbody');
+    if(tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--red);font-family:var(--font-mono);font-size:0.75rem">
+      API error — server may be waking up. Wait 30 seconds and try again.
+    </td></tr>`;
+  } finally {
     loader.classList.remove('show');
-    label.textContent='▶ Run Scanner (Demo)';
+    label.textContent='▶ Run Scanner';
     btn.disabled=false;
-    document.getElementById('sig-count').textContent='5';
-    document.getElementById('sig-count').className='app-card-val g';
-  },3000);
+  }
 }
 
 /* ─── Groww sheet generator ─── */
