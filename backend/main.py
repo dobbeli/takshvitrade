@@ -2,11 +2,28 @@
 Takshvi Trade — FastAPI Backend
 Domain: takshvitrade.com / takshvitrade.in
 """
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from routers import signals, market, auth, news
-import asyncio
+"""
+Takshvi Trade — FastAPI Backend
+"""
+import sys
+import traceback
+
+try:
+    from fastapi import FastAPI
+    from fastapi.middleware.cors import CORSMiddleware
+    from contextlib import asynccontextmanager
+    print("✅ FastAPI imported")
+except Exception as e:
+    print(f"❌ FastAPI import failed: {e}")
+    sys.exit(1)
+
+try:
+    from routers import signals, market, auth, news
+    print("✅ Routers imported")
+except Exception as e:
+    print(f"❌ Router import failed: {e}")
+    traceback.print_exc()
+    sys.exit(1)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -23,12 +40,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://takshvitrade.com",
-        "https://takshvitrade.in",
-        "https://www.takshvitrade.com",
-        "http://localhost:3000",   # dev
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
