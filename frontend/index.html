@@ -562,7 +562,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
       </div>
       <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
         <label style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);letter-spacing:0.1em">CAPITAL (₹)</label>
-        <input id="capital-input" type="number" value="50000" min="10000" step="5000"
+        <input id="capital-input" type="number" placeholder="Enter your capital ₹" min="10000" step="5000"
           style="background:var(--card);border:1px solid var(--border2);color:var(--white);font-family:var(--font-mono);font-size:0.85rem;padding:0.6rem 1rem;width:160px;outline:none"/>
       </div>
       <button class="scan-btn" id="scan-btn" onclick="runScan()">
@@ -669,14 +669,10 @@ document.querySelectorAll('a,button').forEach(el=>{
 });
 
 /* ─── Ticker ─── */
-const tickers=[
-  {n:'RELIANCE',p:'₹2,891',c:'+1.2%',u:true},{n:'TCS',p:'₹3,512',c:'+0.8%',u:true},
-  {n:'HDFCBANK',p:'₹1,688',c:'-0.4%',u:false},{n:'INFY',p:'₹1,492',c:'+2.1%',u:true},
-  {n:'ICICIBANK',p:'₹1,124',c:'+0.6%',u:true},{n:'SBIN',p:'₹782',c:'-1.1%',u:false},
-  {n:'TITAN',p:'₹3,241',c:'+1.8%',u:true},{n:'MARUTI',p:'₹12,340',c:'-0.3%',u:false},
-  {n:'WIPRO',p:'₹481',c:'+0.9%',u:true},{n:'BAJFINANCE',p:'₹6,892',c:'+1.4%',u:true},
-  {n:'NIFTY50',p:'₹22,820',c:'-0.6%',u:false},{n:'ADANIENT',p:'₹2,210',c:'+0.4%',u:true},
-  {n:'LT',p:'₹3,480',c:'-0.2%',u:false},{n:'SUNPHARMA',p:'₹1,640',c:'+1.1%',u:true},
+const tickers = [
+  {n:'NIFTY50',p:'Live',c:'See Market tab',u:true},
+  {n:'Run scanner',p:'for',c:'real signals',u:true},
+  {n:'takshvitrade.com',p:'NSE',c:'Signal Intelligence',u:true},
 ];
 const track=document.getElementById('ticker');
 track.innerHTML=[...tickers,...tickers].map(t=>`
@@ -725,7 +721,12 @@ async function runScan(){
   const loader = document.getElementById('scan-loader');
   const label  = document.getElementById('scan-label');
   const capEl  = document.getElementById('capital-input');
-  const capital = capEl ? parseInt(capEl.value) || 50000 : 50000;
+  // ── CHANGED: no default capital, user must enter ──
+  const capital = capEl ? parseInt(capEl.value) || 0 : 0;
+  if(capital < 10000) {
+    alert('Please enter your capital amount (minimum ₹10,000)');
+    return;
+  }
 
   btn.disabled=true;
   loader.classList.add('show');
