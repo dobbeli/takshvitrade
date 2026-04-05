@@ -410,7 +410,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
       <span class="dash-status">Live · Last scan 14:32 IST</span>
     </div>
     <div class="dash-grid">
-      <div class="dash-metric"><div class="dash-metric-label">Capital Deployed</div><div class="dash-metric-value green">₹48,240</div><div class="dash-metric-sub">of ₹1,00,000 available</div></div>
+      <div class="dash-metric"><div class="dash-metric-label">Capital Deployed</div><div class="dash-metric-value green">--</div><div class="dash-metric-sub">of ₹1,00,000 available</div></div>
       <div class="dash-metric"><div class="dash-metric-label">Signals Today</div><div class="dash-metric-value c">5</div><div class="dash-metric-sub">3 approved · 2 pending</div></div>
       <div class="dash-metric"><div class="dash-metric-label">Avg Score</div><div class="dash-metric-value">76</div><div class="dash-metric-sub">out of 100 possible</div></div>
     </div>
@@ -557,13 +557,28 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   <div class="app-body">
 
     <!-- Signals Tab -->
-    <div id="tab-signals">
-      <div class="app-grid">
-        <div class="app-card"><div class="app-card-label">Capital</div><div class="app-card-val c">₹1,00,000</div><div class="app-card-sub">Available</div></div>
-        <div class="app-card"><div class="app-card-label">Deployed</div><div class="app-card-val">₹48,240</div><div class="app-card-sub">Across 5 trades</div></div>
-        <div class="app-card"><div class="app-card-label">Signals Found</div><div class="app-card-val g" id="sig-count">—</div><div class="app-card-sub">Passed all filters</div></div>
-        <div class="app-card"><div class="app-card-label">Market</div><div class="app-card-val r">BEARISH</div><div class="app-card-sub">Caution — NIFTY below EMA</div></div>
-      </div>
+  <div id="tab-signals">
+  <div class="app-grid">
+    <div class="app-card-label">Capital</div>
+    <div class="app-card-val c" id="capital-display">—</div>
+    <div class="app-card-sub">Enter capital below</div>
+  </div>
+  <div class="app-card">
+    <div class="app-card-label">Deployed</div>
+    <div class="app-card-val" id="capital-deployed">—</div>
+    <div class="app-card-sub">After scan runs</div>
+  </div>
+  <div class="app-card">
+    <div class="app-card-label">Signals Found</div>
+    <div class="app-card-val g" id="sig-count">—</div>
+    <div class="app-card-sub">Passed all filters</div>
+  </div>
+  <div class="app-card">
+    <div class="app-card-label">Market</div>
+    <div class="app-card-val" id="market-status">—</div>
+    <div class="app-card-sub" id="market-sub">Run scanner first</div>
+  </div>
+</div>
       <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
         <label style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);letter-spacing:0.1em">CAPITAL (₹)</label>
         <input id="capital-input" type="number" placeholder="Enter your capital ₹" min="10000" step="5000"
@@ -709,6 +724,9 @@ async function runScan(){
     alert('Please enter your capital amount (minimum ₹10,000)');
     return;
   }
+   // ── Update capital display card immediately ──
+  const capDisplay = document.getElementById('capital-display');
+  if(capDisplay) capDisplay.textContent = '₹' + capital.toLocaleString('en-IN');
 
   btn.disabled=true;
   loader.classList.add('show');
@@ -727,6 +745,16 @@ async function runScan(){
       niftyEl.innerHTML = bullish
         ? `<span class="nifty-dot dot-green"></span><span class="nifty-text">Market <strong>BULLISH</strong> — good for longs</span>`
         : `<span class="nifty-dot dot-red"></span><span class="nifty-text">Market <strong>BEARISH</strong> — trade carefully</span>`;
+    }
+     // ── ADD THESE LINES RIGHT HERE ──
+    const mStatusEl = document.getElementById('market-status');
+    const mSubEl    = document.getElementById('market-sub');
+    if(mStatusEl){
+      mStatusEl.textContent = bullish ? 'BULLISH' : 'BEARISH';
+      mStatusEl.className   = bullish ? 'app-card-val g' : 'app-card-val r';
+    }
+    if(mSubEl){
+      mSubEl.textContent = bullish ? 'Good for longs' : 'Caution — NIFTY weak';
     }
 
     /* Step 3 — update signal count */
