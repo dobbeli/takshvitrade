@@ -177,7 +177,6 @@ def scan_stock(symbol, capital):
         logging.error(f"Error scanning {symbol}: {e}")
         return None
 
-
 @app.get("/run-scan")
 def run_scan(capital: int = 50000):
 
@@ -185,18 +184,47 @@ def run_scan(capital: int = 50000):
         "RELIANCE.NS",
         "TCS.NS",
         "INFY.NS",
-        "HDFCBANK.NS",
-        "ICICIBANK.NS"
+        "HDFCBANK.NS"
     ]
 
     results = []
 
     for stock in stocks:
-        r = scan_stock(stock, req.capital)
-        if r:
-            results.append(r)
+        try:
+            df = yf.download(stock, period="3mo", interval="1d", progress=False)
 
-    results.sort(key=lambda x: x["score"], reverse=True)
+            if df is None or df.empty:
+                continue
+
+            df["EMA20"] = ta.trend.ema_indicator(df["Close"], 20)
+            df["EMA50"] = ta.trend.ema_indicator(df["Close"], 50)
+            df["RSI"] = ta.momentum.rsi(df["Close"], 14)
+
+            df = df.dropna()
+            latest = df.iloc[-1]
+
+            entry = round(float(latest["Close"]) * 1.002, 2)
+            sl = round(float(latest["Low"]), 2)
+
+            risk = entry - sl
+            if risk <= 0:
+                continue
+
+            qty = max(1, int((capital * 0.01) / risk))
+            target = round(entry + (risk * 2), 2)
+
+            results.append({
+                "stock": stock.replace(".NS", ""),
+                "entry": entry,
+                "sl": sl,
+                "target": target,
+                "qty": qty,
+                "score": 70
+            })
+
+        except Exception as e:
+            print(f"❌ Error: {e}")
+            continue
 
     return {
         "count": len(results),
