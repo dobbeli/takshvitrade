@@ -84,17 +84,16 @@ def health():
 # ===============================
 # 📊 MARKET API (FIXED)
 # ===============================
-
 @app.get("/market")
 def market_status():
     try:
-        ticker = yf.Ticker("^NSEI")
+        import yfinance as yf
+
+        ticker = yf.Ticker("NIFTYBEES.NS")
         df = ticker.history(period="5d")
 
-        if df is None or df.empty:
-            logging.warning("Fallback to NIFTYBEES")
-            ticker = yf.Ticker("NIFTYBEES.NS")
-            df = ticker.history(period="5d")
+        print("📊 Market Data:")
+        print(df.tail())
 
         if df is None or df.empty:
             return {"price": 0, "trend": "NA"}
@@ -110,9 +109,8 @@ def market_status():
         }
 
     except Exception as e:
-        logging.error(f"Market error: {e}")
+        print(f"❌ Market error: {e}")
         return {"price": 0, "trend": "NA"}
-
 # ===============================
 # 🔥 SCANNER API
 # ===============================
