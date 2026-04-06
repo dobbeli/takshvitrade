@@ -98,7 +98,9 @@ def score_stock(df: pd.DataFrame):
     elif latest["EMA50"] > latest["EMA200"]:
         score += 10; reasons.append("⚠️ Weak trend (50>200 only)")
     else:
-        return 0, []
+        score += 0      # ← Allow weak stocks through, score will be low
+        reasons.append("❌ No EMA alignment")
+    # Remove the hard return 0 — let other factors decide
 
     # RSI (20 pts)
     rsi = latest["RSI"]
@@ -131,7 +133,7 @@ def score_stock(df: pd.DataFrame):
     elif proximity >= 0.75:
         score += 5;  reasons.append(f"⚠️ Away from 52W high ({proximity*100:.0f}%)")
 
-    if score < 35:
+    if score < 25:
         return 0, []
     return score, reasons
 
@@ -260,7 +262,7 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
 # ── Market health check ───────────────────────────────────────
 def check_market_status() -> dict:
     try:
-        df = yf.download("^NSEI", period="1y", interval="1d",
+        df = yf.download("^NSEI", period="3mo", interval="1d",
                          progress=False, auto_adjust=False,threads=False)
         if df is None or df.empty:
             return {"bullish": True, "error": "Could not fetch NIFTY"}
@@ -274,7 +276,7 @@ def check_market_status() -> dict:
         rsi    = float(ta.momentum.rsi(close, window=14).iloc[-1])
         price  = float(close.iloc[-1])
 
-        bullish = price > ema50 and price > ema200 and rsi > 45
+        bullish = price > ema50 and price > ema200 and rsi > 40
 
         return {
             "price":   round(price, 2),
