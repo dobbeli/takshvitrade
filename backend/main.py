@@ -87,31 +87,38 @@ def health():
 @app.get("/market")
 def market_status():
     try:
-        import yfinance as yf
+        import requests
 
-        ticker = yf.Ticker("NIFTYBEES.NS")
-        df = ticker.history(period="5d")
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI"
 
-        if df is not None and not df.empty:
-            close = df["Close"]
-            price = round(close.iloc[-1], 2)
-            prev = close.iloc[-2]
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
 
-            return {
-                "price": price,
-                "trend": "UP" if price > prev else "DOWN"
-            }
+        res = requests.get(url, headers=headers)
+        data = res.json()
 
-        print("❌ yfinance failed → using fallback")
+        result = data["chart"]["result"][0]
+        close_prices = result["indicators"]["quote"][0]["close"]
+
+        price = round(close_prices[-1], 2)
+        prev = close_prices[-2]
+
+        trend = "UP" if price > prev else "DOWN"
+
+        return {
+            "price": price,
+            "trend": trend
+        }
 
     except Exception as e:
         print(f"❌ Market error: {e}")
 
-    # 🔥 FALLBACK (ALWAYS WORKS)
-    return {
-        "price": 22800,   # approx nifty
-        "trend": "DOWN"
-    }
+        # fallback only if API fails
+        return {
+            "price": 22800,
+            "trend": "DOWN"
+        }
 # ===============================
 # 🔥 SCANNER API
 # ===============================
