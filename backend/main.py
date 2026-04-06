@@ -178,8 +178,8 @@ def scan_stock(symbol, capital):
         return None
 
 
-@app.post("/run-scan")
-def run_scan(req: ScanRequest):
+@app.get("/run-scan")
+def run_scan(capital: int = 50000):
 
     stocks = [
         "RELIANCE.NS",
