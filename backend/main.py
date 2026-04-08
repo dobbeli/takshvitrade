@@ -179,30 +179,59 @@ def scan_stock(symbol, capital):
 
 @app.get("/run-scan")
 def run_scan(capital: int = 50000):
-
     stocks = [
         "RELIANCE.NS",
         "TCS.NS",
         "INFY.NS",
-        "HDFCBANK.NS"
+        "HDFCBANK.NS",
+        "ICICIBANK.NS",
+        "SBIN.NS"
     ]
 
     results = []
 
     for stock in stocks:
         try:
+            print(f"🔍 Scanning {stock}")
+
             df = yf.download(stock, period="3mo", interval="1d", progress=False)
 
             if df is None or df.empty:
+                print(f"❌ No data: {stock}")
                 continue
 
+            # Indicators
             df["EMA20"] = ta.trend.ema_indicator(df["Close"], 20)
             df["EMA50"] = ta.trend.ema_indicator(df["Close"], 50)
             df["RSI"] = ta.momentum.rsi(df["Close"], 14)
+            df["VOL_SMA"] = df["Volume"].rolling(10).mean()
 
             df = df.dropna()
+
+            if len(df) < 20:
+                continue
+
             latest = df.iloc[-1]
 
+            score = 0
+
+            # ✅ RELAXED TREND
+            if latest["EMA20"] > latest["EMA50"]:
+                score += 20
+
+            # ✅ RELAXED RSI
+            if 45 < latest["RSI"] < 75:
+                score += 20
+
+            # ✅ VOLUME CONFIRMATION
+            if latest["Volume"] > latest["VOL_SMA"]:
+                score += 20
+
+            # ❌ Skip weak stocks
+            if score < 30:
+                continue
+
+            # Trade Calculation
             entry = round(float(latest["Close"]) * 1.002, 2)
             sl = round(float(latest["Low"]), 2)
 
@@ -219,12 +248,15 @@ def run_scan(capital: int = 50000):
                 "sl": sl,
                 "target": target,
                 "qty": qty,
-                "score": 70
+                "score": score
             })
 
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"❌ Error scanning {stock}: {e}")
             continue
+
+    # 🔥 Sort best stocks first
+    results.sort(key=lambda x: x["score"], reverse=True)
 
     return {
         "count": len(results),
