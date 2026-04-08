@@ -180,45 +180,39 @@ def scan_stock(symbol, capital):
 @app.get("/run-scan")
 def run_scan(capital: int = 50000):
 
-    stocks = [
-        "RELIANCE.NS",
-        "TCS.NS",
-        "INFY.NS",
-        "HDFCBANK.NS",
-        "ICICIBANK.NS",
-        "SBIN.NS"
-    ]
+    import requests
+
+    stocks = ["RELIANCE.NS", "TCS.NS", "INFY.NS"]
 
     results = []
 
     for stock in stocks:
         try:
-            df = yf.download(stock, period="3mo", interval="1d", progress=False)
+            print(f"🔍 Fetching {stock}")
 
-            if df is None or df.empty:
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{stock}"
+
+            headers = {
+                "User-Agent": "Mozilla/5.0"
+            }
+
+            res = requests.get(url, headers=headers)
+            data = res.json()
+
+            result = data["chart"]["result"][0]
+            close_prices = result["indicators"]["quote"][0]["close"]
+
+            if not close_prices or len(close_prices) < 20:
                 continue
 
-            df["EMA20"] = ta.trend.ema_indicator(df["Close"], 20)
-            df["EMA50"] = ta.trend.ema_indicator(df["Close"], 50)
-            df["RSI"] = ta.momentum.rsi(df["Close"], 14)
+            latest_price = close_prices[-1]
+            prev_price = close_prices[-2]
 
-            df = df.dropna()
+            # Dummy EMA logic (simple approximation)
+            trend = latest_price > prev_price
 
-            if len(df) < 20:
-                continue
-
-            latest = df.iloc[-1]
-
-            score = 50  # 🔥 base score (IMPORTANT)
-
-            if latest["EMA20"] > latest["EMA50"]:
-                score += 10
-
-            if 40 < latest["RSI"] < 80:
-                score += 10
-
-            entry = round(float(latest["Close"]) * 1.002, 2)
-            sl = round(float(latest["Low"]), 2)
+            entry = round(latest_price * 1.002, 2)
+            sl = round(latest_price * 0.98, 2)
 
             risk = entry - sl
             if risk <= 0:
@@ -226,6 +220,8 @@ def run_scan(capital: int = 50000):
 
             qty = max(1, int((capital * 0.01) / risk))
             target = round(entry + (risk * 2), 2)
+
+            score = 70 if trend else 50
 
             results.append({
                 "stock": stock.replace(".NS", ""),
@@ -237,11 +233,8 @@ def run_scan(capital: int = 50000):
             })
 
         except Exception as e:
-            print(f"❌ Error scanning {stock}: {e}")
+            print(f"❌ Error {stock}: {e}")
             continue
-
-    # 🔥 ALWAYS RETURN TOP 3
-    results = sorted(results, key=lambda x: x["score"], reverse=True)[:3]
 
     return {
         "count": len(results),
