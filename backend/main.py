@@ -179,6 +179,7 @@ def scan_stock(symbol, capital):
 
 @app.get("/run-scan")
 def run_scan(capital: int = 50000):
+
     stocks = [
         "RELIANCE.NS",
         "TCS.NS",
@@ -192,19 +193,14 @@ def run_scan(capital: int = 50000):
 
     for stock in stocks:
         try:
-            print(f"🔍 Scanning {stock}")
-
             df = yf.download(stock, period="3mo", interval="1d", progress=False)
 
             if df is None or df.empty:
-                print(f"❌ No data: {stock}")
                 continue
 
-            # Indicators
             df["EMA20"] = ta.trend.ema_indicator(df["Close"], 20)
             df["EMA50"] = ta.trend.ema_indicator(df["Close"], 50)
             df["RSI"] = ta.momentum.rsi(df["Close"], 14)
-            df["VOL_SMA"] = df["Volume"].rolling(10).mean()
 
             df = df.dropna()
 
@@ -213,25 +209,14 @@ def run_scan(capital: int = 50000):
 
             latest = df.iloc[-1]
 
-            score = 0
+            score = 50  # 🔥 base score (IMPORTANT)
 
-            # ✅ RELAXED TREND
             if latest["EMA20"] > latest["EMA50"]:
-                score += 20
+                score += 10
 
-            # ✅ RELAXED RSI
-            if 45 < latest["RSI"] < 75:
-                score += 20
+            if 40 < latest["RSI"] < 80:
+                score += 10
 
-            # ✅ VOLUME CONFIRMATION
-            if latest["Volume"] > latest["VOL_SMA"]:
-                score += 20
-
-            # ❌ Skip weak stocks
-            if score < 30:
-                continue
-
-            # Trade Calculation
             entry = round(float(latest["Close"]) * 1.002, 2)
             sl = round(float(latest["Low"]), 2)
 
@@ -255,8 +240,8 @@ def run_scan(capital: int = 50000):
             print(f"❌ Error scanning {stock}: {e}")
             continue
 
-    # 🔥 Sort best stocks first
-    results.sort(key=lambda x: x["score"], reverse=True)
+    # 🔥 ALWAYS RETURN TOP 3
+    results = sorted(results, key=lambda x: x["score"], reverse=True)[:3]
 
     return {
         "count": len(results),
