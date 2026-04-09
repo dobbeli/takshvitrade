@@ -276,7 +276,7 @@ def run_scan(capital: int = 50000):
                 score += 20
 
             # ❌ FILTER WEAK STOCKS
-            if score < 60:
+            if score < 80:
                 continue
 
             # ===============================
@@ -309,7 +309,7 @@ def run_scan(capital: int = 50000):
             continue
 
     # 🔥 SORT BEST FIRST
-    results = sorted(results, key=lambda x: x["score"], reverse=True)
+    results = sorted(results, key=lambda x: x["score"], reverse=True)[:3]
 
     return {
         "count": len(results),
