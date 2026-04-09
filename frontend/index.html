@@ -714,105 +714,123 @@ const API = 'https://takshvitrade-api.onrender.com';
 
 /* ─── Real Scanner ─── */
 async function runScan(){
+
   const btn    = document.getElementById('scan-btn');
   const loader = document.getElementById('scan-loader');
   const label  = document.getElementById('scan-label');
   const capEl  = document.getElementById('capital-input');
-  // ── CHANGED: no default capital, user must enter ──
+
   const capital = capEl ? parseInt(capEl.value) || 0 : 0;
-  if(capital < 10000) {
-    alert('Please enter your capital amount (minimum ₹10,000)');
+
+  if(capital < 10000){
+    alert('Enter minimum ₹10,000 capital');
     return;
   }
-   // ── Update capital display card immediately ──
-  const capDisplay = document.getElementById('capital-display');
-  if(capDisplay) capDisplay.textContent = '₹' + capital.toLocaleString('en-IN');
 
-  btn.disabled=true;
+  btn.disabled = true;
   loader.classList.add('show');
-  label.textContent='Scanning stocks...';
+  label.textContent = 'Scanning stocks...';
 
   try {
-    /* Step 1 — market status */
-    label.textContent='Checking market...';
-    const mRes  = await fetch(`${API}/api/signals/quick?capital=${capital}`);
-    const mData = await mRes.json();
 
-    /* Step 2 — update market card */
-    const bullish = mData.market?.bullish;
-    const niftyEl = document.getElementById('nifty-status');
-    if(niftyEl){
-      niftyEl.innerHTML = bullish
-        ? `<span class="nifty-dot dot-green"></span><span class="nifty-text">Market <strong>BULLISH</strong> — good for longs</span>`
-        : `<span class="nifty-dot dot-red"></span><span class="nifty-text">Market <strong>BEARISH</strong> — trade carefully</span>`;
-    }
-     // ── ADD THESE LINES RIGHT HERE ──
-    const mStatusEl = document.getElementById('market-status');
-    const mSubEl    = document.getElementById('market-sub');
-    if(mStatusEl){
-      mStatusEl.textContent = bullish ? 'BULLISH' : 'BEARISH';
-      mStatusEl.className   = bullish ? 'app-card-val g' : 'app-card-val r';
-    }
-    if(mSubEl){
-      mSubEl.textContent = bullish ? 'Good for longs' : 'Caution — NIFTY weak';
-    }
+    // ✅ CORRECT API CALL
+    const res = await fetch(`${API}/run-scan?capital=${capital}`);
+    const data = await res.json();
 
-    /* Step 3 — update signal count */
-    const trades = mData.trades || [];
+    const trades = data.data || [];
+
+    // 🔹 Update signal count
     const sigCountEl = document.getElementById('sig-count');
     if(sigCountEl){
       sigCountEl.textContent = trades.length;
-      sigCountEl.className   = trades.length > 0 ? 'app-card-val g' : 'app-card-val r';
+      sigCountEl.className = trades.length > 0 ? 'app-card-val g' : 'app-card-val r';
     }
 
-    /* Step 4 — render signals table */
+    // 🔹 Render signals
     const tbody = document.getElementById('signals-tbody');
-    if(tbody){
-      if(trades.length === 0){
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted);font-family:var(--font-mono);font-size:0.75rem">
-          No trades passing filters today — market conditions weak. Check again after close.
-        </td></tr>`;
-      } else {
-        tbody.innerHTML = trades.map(t => `
-          <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="showGroww('${t.stock}',${t.entry},${t.stop_loss},${t.target},${t.qty})">
-            <td style="padding:0.9rem 1rem;font-family:var(--font-display);font-weight:700;color:var(--white)">${t.stock}</td>
-            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--cyan)">₹${t.entry}</td>
-            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--red)">₹${t.stop_loss}</td>
-            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--green)">₹${t.target}</td>
-            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--white)">${t.qty}</td>
-            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--white)">₹${t.position?.toLocaleString('en-IN')}</td>
-            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.8rem;color:var(--gold)">${t.score}/100</td>
-            <td style="padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.75rem;color:var(--cyan);text-decoration:underline">Groww →</td>
-          </tr>`).join('');
-      }
-    }
 
-    /* Step 5 — update summary cards */
-    const summary = mData.summary || {};
-    const deployEl = document.getElementById('capital-deployed');
-    if(deployEl) deployEl.textContent = `₹${(summary.total_deploy||0).toLocaleString('en-IN')}`;
-    const riskEl = document.getElementById('total-risk');
-    if(riskEl) riskEl.textContent = `₹${(summary.total_risk||0).toLocaleString('en-IN')}`;
+    if(trades.length === 0){
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="8" style="text-align:center;padding:2rem;color:var(--gold)">
+            No high-quality trades today — wait for better setup
+          </td>
+        </tr>`;
+    } else {
+
+      tbody.innerHTML = trades.map((t, index) => {
+
+        let signal = "WAIT";
+        let color = "yellow";
+
+        if(t.score >= 80){
+          signal = "BUY";
+          color = "lime";
+        }
+
+        if(index === 0){
+          signal = "🔥 BEST";
+          color = "cyan";
+        }
+
+        return `
+        <tr onclick="showGroww('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty})"
+            style="border-bottom:1px solid var(--border);cursor:pointer">
+
+          <td style="padding:0.9rem;color:var(--white);font-weight:bold">${t.stock}</td>
+
+          <td style="padding:0.9rem;color:${color}">${t.score}</td>
+
+          <td style="padding:0.9rem">₹${t.entry}</td>
+
+          <td style="padding:0.9rem;color:var(--red)">₹${t.sl}</td>
+
+          <td style="padding:0.9rem;color:var(--green)">₹${t.target}</td>
+
+          <td style="padding:0.9rem">${t.qty}</td>
+
+          <td style="padding:0.9rem;color:${color};font-weight:bold">${signal}</td>
+
+          <td style="padding:0.9rem;color:var(--cyan)">Groww →</td>
+        </tr>
+        `;
+      }).join('');
+    }
 
   } catch(err){
-    console.error('Scan error:', err);
-    const tbody = document.getElementById('signals-tbody');
-    if(tbody) tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--red);font-family:var(--font-mono);font-size:0.75rem">
-      API error — server may be waking up. Wait 30 seconds and try again.
-    </td></tr>`;
-  } finally {
+    console.error(err);
+
+    document.getElementById('signals-tbody').innerHTML = `
+      <tr>
+        <td colspan="8" style="text-align:center;color:var(--red)">
+          Server error — try again
+        </td>
+      </tr>`;
+  }
+
+  finally{
     loader.classList.remove('show');
-    label.textContent='▶ Run Scanner';
-    btn.disabled=false;
+    label.textContent = '▶ Run Scanner';
+    btn.disabled = false;
   }
 }
+/* ─── GROWW FUNCTION (UNCHANGED) ─── */
+function showGroww(stock,entry,sl,target,qty){
+  alert(`Trade ${stock}\nEntry: ₹${entry}\nSL: ₹${sl}\nTarget: ₹${target}\nQty: ${qty}`);
+}
+</script>
 
 /* ─── Groww sheet generator ─── */
 function showGroww(stock,entry,sl,target,qty){
-  showTab('groww');
-  const risk=((entry-sl)*qty).toFixed(0);
-  const upside=(((target-entry)/entry)*100).toFixed(1);
-  document.getElementById('groww-content').innerHTML=`
+  alert(`
+Trade: ${stock}
+
+Entry: ₹${entry}
+Stop Loss: ₹${sl}
+Target: ₹${target}
+Quantity: ${qty}
+`);
+}
     <div class="app-table" style="padding:2rem">
       <div style="font-family:var(--font-display);font-weight:700;font-size:1.3rem;color:var(--white);margin-bottom:0.3rem">📱 Groww Order — ${stock}</div>
       <div style="font-family:var(--font-mono);font-size:0.65rem;color:var(--cyan);margin-bottom:2rem;letter-spacing:0.1em">PLACE AFTER 9:15 AM · LIMIT ORDERS ONLY · NSE · CNC</div>
@@ -842,7 +860,6 @@ function showGroww(stock,entry,sl,target,qty){
         </div>
       </div>
     </div>`;
-}
 </script>
 </body>
 </html>
