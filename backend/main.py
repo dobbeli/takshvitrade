@@ -183,13 +183,13 @@ def run_scan(capital: int = 50000):
     import requests
 
     stocks = [
-        "RELIANCE.NS",
-        "TCS.NS",
-        "INFY.NS",
-        "HDFCBANK.NS",
-        "ICICIBANK.NS",
-        "SBIN.NS"
-    ]
+    "RELIANCE.NS","TCS.NS","INFY.NS","HDFCBANK.NS","ICICIBANK.NS",
+    "SBIN.NS","AXISBANK.NS","KOTAKBANK.NS","LT.NS","ITC.NS",
+    "HINDUNILVR.NS","BAJFINANCE.NS","MARUTI.NS","TITAN.NS",
+    "SUNPHARMA.NS","ULTRACEMCO.NS","WIPRO.NS","ONGC.NS",
+    "POWERGRID.NS","NTPC.NS","ADANIENT.NS","ADANIPORTS.NS",
+    "COALINDIA.NS","JSWSTEEL.NS","TATASTEEL.NS","HCLTECH.NS"
+]
 
     results = []
 
