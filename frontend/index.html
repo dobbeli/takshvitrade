@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Takshvi Trade — NSE Signal Intelligence</title>
-<meta name="description" content="ATR-based swing signals, multi-factor scoring, and Groww-ready order sheets for Indian retail traders."/>
+<meta name="description" content="ATR-based swing signals, multi-factor scoring, and trade order sheets for Indian retail traders."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
 <style>
@@ -329,7 +329,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 
   <div class="nifty-badge" id="nifty-badge">
     <div class="nifty-dot dot-red" id="nifty-dot"></div>
-    <span class="nifty-text">NIFTY50 <strong id="nifty-price">₹22,820</strong> · <span id="nifty-verdict">BEARISH — market caution</span></span>
+    <span class="nifty-text">NIFTY50 <strong id="nifty-price">₹--</strong> · <span id="nifty-verdict">BEARISH — market caution</span></span>
   </div>
 
   <div class="eyebrow">NSE Swing Signal Intelligence · takshvitrade.com</div>
@@ -359,7 +359,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 <section id="scanners">
   <div class="sec-tag">What We Scan</div>
   <h2>Six scanners.<br/>One platform.</h2>
-  <p class="sec-lead">Each scanner is purpose-built for Indian markets — NSE data, INR pricing, Groww-compatible output.</p>
+  <p class="sec-lead">Each scanner is purpose-built for Indian markets — NSE data, INR pricing, trade-compatible output.</p>
   <div class="scanner-grid reveal">
     <div class="sc-card"><span class="sc-icon">📈</span><div class="sc-title">Swing Scanner</div><div class="sc-desc">EMA stack + RSI + volume + 52W high proximity. ATR-based stops that adapt to each stock's volatility. Scores 0–100 with multi-factor engine.</div><span class="badge badge-live">● Live</span></div>
     <div class="sc-card"><span class="sc-icon">⚡</span><div class="sc-title">Intraday Scanner</div><div class="sc-desc">5-min OHLCV candles, VWAP deviation signals, RSI momentum bursts. Built for 9:15–3:30 PM execution on NSE.</div><span class="badge badge-soon">Coming Phase 3</span></div>
@@ -403,7 +403,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 <section id="dashboard">
   <div class="sec-tag">Live Dashboard</div>
   <h2>Everything in<br/>one view.</h2>
-  <p class="sec-lead">Real-time signal table, market status, capital allocation, and Groww order sheets — refreshed every 15 minutes.</p>
+  <p class="sec-lead">Real-time signal table, market status, capital allocation, and Trade order sheets — refreshed every 15 minutes.</p>
   <div class="dash-wrap reveal">
     <div class="dash-topbar">
       <span class="dash-title">Takshvi Trade · Dashboard</span>
@@ -414,13 +414,29 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
       <div class="dash-metric"><div class="dash-metric-label">Signals Today</div><div class="dash-metric-value c">5</div><div class="dash-metric-sub">3 approved · 2 pending</div></div>
       <div class="dash-metric"><div class="dash-metric-label">Avg Score</div><div class="dash-metric-value">76</div><div class="dash-metric-sub">out of 100 possible</div></div>
     </div>
-    <div class="market-bar">
-      <div class="market-item"><div class="mi-label">NIFTY50</div><div class="mi-value">22,820</div><div class="mi-chg" style="color:var(--red)">▼ −0.6%</div></div>
-      <div class="market-item"><div class="mi-label">Market Status</div><div class="mi-value" style="color:var(--red);font-size:0.9rem">BEARISH</div><div class="mi-chg">Below EMA50 & EMA200</div></div>
-      <div class="market-item"><div class="mi-label">NIFTY RSI</div><div class="mi-value">35.6</div><div class="mi-chg" style="color:var(--gold)">⚠ Caution zone</div></div>
-      <div class="market-item"><div class="mi-label">News Sentiment</div><div class="mi-value" style="color:var(--gold);font-size:0.9rem">MIXED</div><div class="mi-chg">Top score trades only</div></div>
+   <div class="market-bar">
+
+    <div class="market-item">
+    <div class="mi-label">NIFTY50</div>
+    <div class="mi-value" id="dashboard-nifty-price">--</div>
+    <div class="mi-chg" id="nifty-change">--</div>
+   </div>
+   <div class="market-item">
+    <div class="mi-label">Market Trend</div>
+    <div class="mi-value" id="market-trend">--</div>
+    <div class="mi-chg" id="market-note">--</div>
+   </div>
+   <div class="market-item">
+    <div class="mi-label">Signal Strength</div>
+    <div class="mi-value" id="signal-strength">--</div>
+    <div class="mi-chg">Based on top trades</div>
+   </div>
+   <div class="market-item">
+    <div class="mi-label">System Status</div>
+    <div class="mi-value" id="system-status">READY</div>
+    <div class="mi-chg">Scanner active</div>
     </div>
-  </div>
+</div>
 </section>
 
 <!-- ═══════════ PRICING ═══════════ -->
@@ -440,7 +456,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
       <div class="p-plan">Basic</div>
       <div class="p-price"><span class="sym">₹</span>299<span class="per">/mo</span></div>
       <div class="p-desc">All swing + intraday · WhatsApp alerts</div>
-      <ul class="p-list"><li>Unlimited swing signals</li><li>Intraday scanner</li><li>Real-time alerts</li><li>WhatsApp via Twilio</li><li>Groww order sheets</li></ul>
+      <ul class="p-list"><li>Unlimited swing signals</li><li>Intraday scanner</li><li>Real-time alerts</li><li>WhatsApp via Twilio</li><li>Trade order sheets</li></ul>
       <button class="p-btn p-btn-hot">Subscribe — Razorpay</button>
     </div>
     <div class="p-card">
@@ -548,7 +564,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
     <div class="app-tabs">
       <button class="app-tab active" onclick="showTab('signals')">Signals</button>
       <button class="app-tab" onclick="showTab('market')">Market</button>
-      <button class="app-tab" onclick="showTab('groww')">Groww Sheet</button>
+      <button class="app-tab" onclick="showTab('trade')">Trade Panel</button>
       <button class="app-tab" onclick="showTab('news')">News</button>
     </div>
     <button class="app-close" onclick="closeApp()">✕ Close</button>
@@ -557,70 +573,111 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   <div class="app-body">
 
     <!-- Signals Tab -->
-  <div id="tab-signals">
+     
+<div id="tab-signals">
+  <!-- TOP CARDS -->
   <div class="app-grid">
-    <div class="app-card-label">Capital</div>
-    <div class="app-card-val c" id="capital-display">—</div>
-    <div class="app-card-sub">Enter capital below</div>
+    <div class="app-card">
+      <div class="app-card-label">Capital</div>
+      <div class="app-card-val c" id="capital-display">—</div>
+      <div class="app-card-sub">Enter capital below</div>
+    </div>
+    <div class="app-card">
+      <div class="app-card-label">Deployed</div>
+      <div class="app-card-val" id="capital-deployed">—</div>
+      <div class="app-card-sub">After scan runs</div>
+    </div>
+    <div class="app-card">
+      <div class="app-card-label">Signals Found</div>
+      <div class="app-card-val g" id="sig-count">—</div>
+      <div class="app-card-sub">Passed all filters</div>
+    </div>
+    <div class="app-card">
+      <div class="app-card-label">Market</div>
+      <div class="app-card-val" id="market-status">—</div>
+      <div class="app-card-sub" id="market-sub">Run scanner first</div>
+    </div>
   </div>
-  <div class="app-card">
-    <div class="app-card-label">Deployed</div>
-    <div class="app-card-val" id="capital-deployed">—</div>
-    <div class="app-card-sub">After scan runs</div>
+  <!-- INPUT -->
+  <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+    <label style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);letter-spacing:0.1em">
+      CAPITAL (₹)
+    </label>
+    <input id="capital-input" type="number"
+      placeholder="Enter your capital ₹"
+      min="10000"
+      step="5000"
+      style="background:var(--card);
+             border:1px solid var(--border2);
+             color:var(--white);
+             font-family:var(--font-mono);
+             font-size:0.85rem;
+             padding:0.6rem 1rem;
+             width:160px;
+             outline:none"/>
   </div>
-  <div class="app-card">
-    <div class="app-card-label">Signals Found</div>
-    <div class="app-card-val g" id="sig-count">—</div>
-    <div class="app-card-sub">Passed all filters</div>
-  </div>
-  <div class="app-card">
-    <div class="app-card-label">Market</div>
-    <div class="app-card-val" id="market-status">—</div>
-    <div class="app-card-sub" id="market-sub">Run scanner first</div>
+  <!-- SCAN BUTTON -->
+  <button class="scan-btn" id="scan-btn" onclick="runScan()">
+    <div class="scan-loader" id="scan-loader"></div>
+    <span id="scan-label">▶ Run Scanner</span>
+  </button>
+  <!-- TABLE -->
+  <div class="app-table">
+    <div class="app-table-head">
+      <span>Stock</span>
+      <span>Score</span>
+      <span>Entry ₹</span>
+      <span>SL ₹</span>
+      <span>Target ₹</span>
+      <span>RR</span>
+      <span>Qty</span>
+      <span>Action</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse">
+      <tbody id="signals-tbody">
+        <tr>
+          <td colspan="8"
+              style="text-align:center;padding:2rem;color:var(--muted);
+                     font-family:var(--font-mono);font-size:0.75rem">
+            Click Run Scanner to load live signals
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </div>
-      <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
-        <label style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);letter-spacing:0.1em">CAPITAL (₹)</label>
-        <input id="capital-input" type="number" placeholder="Enter your capital ₹" min="10000" step="5000"
-          style="background:var(--card);border:1px solid var(--border2);color:var(--white);font-family:var(--font-mono);font-size:0.85rem;padding:0.6rem 1rem;width:160px;outline:none"/>
-      </div>
-      <button class="scan-btn" id="scan-btn" onclick="runScan()">
-        <div class="scan-loader" id="scan-loader"></div>
-        <span id="scan-label">▶ Run Scanner</span>
-      </button>
-      <div class="app-table">
-        <div class="app-table-head">
-          <span>Stock</span><span>Score</span><span>Entry ₹</span><span>SL ₹</span><span>Target ₹</span><span>RR</span><span>Qty</span><span>Action</span>
-        </div>
-        <table style="width:100%;border-collapse:collapse"><tbody id="signals-tbody"><tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted);font-family:var(--font-mono);font-size:0.75rem">Click Run Scanner to load live signals</td></tr></tbody></table>
-        <div id="signals-body" style="display:none">
-        </div>
 
     <!-- Market Tab -->
-    <div id="tab-market" style="display:none">
-      <div class="app-grid">
-        <div class="app-card"><div class="app-card-label">NIFTY50 Price</div><div class="app-card-val r">₹22,820</div><div class="app-card-sub">As of last close</div></div>
-        <div class="app-card"><div class="app-card-label">EMA 50</div><div class="app-card-val">₹24,565</div><div class="app-card-sub" style="color:var(--red)">Price below ❌</div></div>
-        <div class="app-card"><div class="app-card-label">EMA 200</div><div class="app-card-val">₹25,000</div><div class="app-card-sub" style="color:var(--red)">Price below ❌</div></div>
-        <div class="app-card"><div class="app-card-label">RSI (14)</div><div class="app-card-val" style="color:var(--gold)">35.6</div><div class="app-card-sub">Approaching oversold</div></div>
-      </div>
-      <div class="app-table" style="padding:2rem">
-        <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);margin-bottom:1rem">MARKET VERDICT</div>
-        <div style="font-family:var(--font-display);font-weight:700;font-size:2rem;color:var(--red);letter-spacing:-0.04em">❌ BEARISH</div>
-        <div style="font-family:var(--font-mono);font-size:0.8rem;color:var(--text);margin-top:1rem;line-height:1.8">
-          NIFTY is trading <strong style="color:var(--red)">₹1,745 (7.1%)</strong> below EMA50 and <strong style="color:var(--red)">₹2,180 (8.7%)</strong> below EMA200.<br/>
-          RSI at 35.6 indicates weak momentum approaching oversold territory.<br/><br/>
-          <strong style="color:var(--gold)">Recommendation:</strong> Skip trading today. Wait for price to reclaim EMA50 and RSI to cross 50.
-        </div>
-      </div>
+  <div id="tab-market" style="display:none">
+   <div class="app-grid">
+    <div class="app-card">
+      <div class="app-card-label">NIFTY50 Price</div>
+      <div class="app-card-val" id="app-nifty-price">--</div>
+      <div class="app-card-sub">Live data</div>
     </div>
-
-    <!-- Groww Tab -->
-    <div id="tab-groww" style="display:none">
-      <div id="groww-content">
+    <div class="app-card">
+      <div class="app-card-label">Trend</div>
+      <div class="app-card-val" id="app-market-trend">--</div>
+      <div class="app-card-sub">Based on price movement</div>
+    </div>
+    <div class="app-card">
+      <div class="app-card-label">Signal Strength</div>
+      <div class="app-card-val" id="app-signal-strength">--</div>
+      <div class="app-card-sub">From scanner</div>
+    </div>
+    <div class="app-card">
+      <div class="app-card-label">System</div>
+      <div class="app-card-val" style="color:var(--green)">ACTIVE</div>
+      <div class="app-card-sub">Ready to trade</div>
+    </div>
+  </div>
+</div>
+    <!-- Trade Panel Tab -->
+    <div id="tab-trade" style="display:none">
+      <div id="trade-content">
         <div class="app-table" style="padding:2rem">
-          <div style="font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--white);margin-bottom:0.5rem">📱 Groww Order Sheet</div>
-          <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);margin-bottom:1.5rem">Click "Groww →" on any signal row to generate step-by-step Groww instructions</div>
+          <div style="font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--white);margin-bottom:0.5rem">Trade Execution Panel</div>
+          <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);margin-bottom:1.5rem">Click "trade →" on any signal row to generate step-by-step Trade instructions</div>
           <div style="font-family:var(--font-mono);font-size:0.8rem;color:var(--cyan)">← Select a signal from the Signals tab first</div>
         </div>
       </div>
@@ -698,57 +755,50 @@ function closeApp(){
   document.getElementById('app').classList.remove('open');
   document.body.style.overflow='';
 }
-
 /* ─── Tabs ─── */
 function showTab(name){
-  ['signals','market','groww','news'].forEach(t=>{
-    document.getElementById('tab-'+t).style.display = t===name?'block':'none';
+  ['signals','market','trade','news'].forEach(t=>{
+    const el = document.getElementById('tab-'+t);
+    if(el){
+      el.style.display = t===name ? 'block' : 'none';
+    }
   });
   document.querySelectorAll('.app-tab').forEach((btn,i)=>{
-    btn.classList.toggle('active',['signals','market','groww','news'][i]===name);
+    btn.classList.toggle('active',['signals','market','trade','news'][i]===name);
   });
 }
 
 /* ─── API CONFIG ─── */
 const API = 'https://takshvitrade-api.onrender.com';
 
-/* ─── Real Scanner ─── */
+/* ─── RUN SCANNER (FINAL CLEAN VERSION) ─── */
 async function runScan(){
-
   const btn    = document.getElementById('scan-btn');
   const loader = document.getElementById('scan-loader');
   const label  = document.getElementById('scan-label');
   const capEl  = document.getElementById('capital-input');
-
   const capital = capEl ? parseInt(capEl.value) || 0 : 0;
-
+  document.getElementById('capital-display').textContent = `₹${capital}`;
   if(capital < 10000){
     alert('Enter minimum ₹10,000 capital');
     return;
   }
-
   btn.disabled = true;
   loader.classList.add('show');
   label.textContent = 'Scanning stocks...';
-
   try {
-
-    // ✅ CORRECT API CALL
+    // ✅ CORRECT API (IMPORTANT FIX)
     const res = await fetch(`${API}/run-scan?capital=${capital}`);
     const data = await res.json();
-
     const trades = data.data || [];
-
-    // 🔹 Update signal count
-    const sigCountEl = document.getElementById('sig-count');
-    if(sigCountEl){
-      sigCountEl.textContent = trades.length;
-      sigCountEl.className = trades.length > 0 ? 'app-card-val g' : 'app-card-val r';
-    }
-
-    // 🔹 Render signals
+    document.getElementById('sig-count').textContent = trades.length;
+    document.getElementById('signal-strength').textContent =
+    trades.length > 0 ? "STRONG" : "WEAK";
+    document.getElementById('app-signal-strength').textContent =
+    trades.length > 0 ? "ACTIVE" : "LOW";
+    document.getElementById('capital-deployed').textContent =
+    trades.length > 0 ? "Partially used" : "0";
     const tbody = document.getElementById('signals-tbody');
-
     if(trades.length === 0){
       tbody.innerHTML = `
         <tr>
@@ -757,24 +807,19 @@ async function runScan(){
           </td>
         </tr>`;
     } else {
-
       tbody.innerHTML = trades.map((t, index) => {
-
         let signal = "WAIT";
         let color = "yellow";
-
         if(t.score >= 80){
           signal = "BUY";
           color = "lime";
         }
-
         if(index === 0){
           signal = "🔥 BEST";
           color = "cyan";
         }
-
         return `
-        <tr onclick="showGroww('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty})"
+        <tr onclick="showTrade('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty})"
             style="border-bottom:1px solid var(--border);cursor:pointer">
 
           <td style="padding:0.9rem;color:var(--white);font-weight:bold">${t.stock}</td>
@@ -791,7 +836,7 @@ async function runScan(){
 
           <td style="padding:0.9rem;color:${color};font-weight:bold">${signal}</td>
 
-          <td style="padding:0.9rem;color:var(--cyan)">Groww →</td>
+          <td style="padding:0.9rem;color:var(--cyan)">Execute →</td>
         </tr>
         `;
       }).join('');
@@ -814,52 +859,94 @@ async function runScan(){
     btn.disabled = false;
   }
 }
-/* ─── GROWW FUNCTION (UNCHANGED) ─── */
-function showGroww(stock,entry,sl,target,qty){
-  alert(`Trade ${stock}\nEntry: ₹${entry}\nSL: ₹${sl}\nTarget: ₹${target}\nQty: ${qty}`);
-}
-</script>
 
-/* ─── Groww sheet generator ─── */
-function showGroww(stock,entry,sl,target,qty){
+/* ─── GENERIC TRADE FUNCTION (BROKER NEUTRAL) ─── */
+function showTrade(stock, entry, sl, target, qty){
+
+  const risk = ((entry - sl) * qty).toFixed(0);
+  const upside = (((target - entry) / entry) * 100).toFixed(1);
+
   alert(`
-Trade: ${stock}
+📊 TRADE PLAN
+
+Stock: ${stock}
 
 Entry: ₹${entry}
 Stop Loss: ₹${sl}
 Target: ₹${target}
 Quantity: ${qty}
-`);
+
+Risk: ₹${risk}
+Reward Ratio: 1:2
+Upside: ${upside}%
+
+👉 Use ANY broker:
+- Zerodha
+- Groww
+- Angel One
+- Upstox
+
+Rules:
+• Enter above entry price
+• Set SL immediately
+• Avoid gap-up > 2%
+  `);
 }
-    <div class="app-table" style="padding:2rem">
-      <div style="font-family:var(--font-display);font-weight:700;font-size:1.3rem;color:var(--white);margin-bottom:0.3rem">📱 Groww Order — ${stock}</div>
-      <div style="font-family:var(--font-mono);font-size:0.65rem;color:var(--cyan);margin-bottom:2rem;letter-spacing:0.1em">PLACE AFTER 9:15 AM · LIMIT ORDERS ONLY · NSE · CNC</div>
-      <div style="display:flex;flex-direction:column;gap:1rem;font-family:var(--font-mono);font-size:0.82rem;color:var(--text);line-height:1.8">
-        <div><span style="color:var(--muted)">STEP 1</span> &nbsp; Search <strong style="color:var(--white)">'${stock}'</strong> in Groww app</div>
-        <div><span style="color:var(--muted)">STEP 2</span> &nbsp; Tap BUY → select <strong style="color:var(--white)">CNC</strong> (not MIS) → Order type: <strong style="color:var(--white)">LIMIT</strong></div>
-        <div style="background:var(--dark);padding:1rem;border:1px solid var(--border);margin:0.5rem 0">
-          &nbsp;&nbsp;Qty &nbsp;&nbsp;&nbsp;: <strong style="color:var(--cyan)">${qty} shares</strong><br/>
-          &nbsp;&nbsp;Price : <strong style="color:var(--cyan)">₹${entry}</strong><br/>
-          &nbsp;&nbsp;Total : <strong style="color:var(--white)">₹${(entry*qty).toLocaleString('en-IN')}</strong>
-        </div>
-        <div><span style="color:var(--muted)">STEP 3</span> &nbsp; After order fills → set <strong style="color:var(--white)">GTT (Good Till Triggered)</strong></div>
-        <div style="background:var(--dark);padding:1rem;border:1px solid var(--border);margin:0.5rem 0">
-          &nbsp;&nbsp;GTT Stop Loss : <strong style="color:var(--red)">₹${sl}</strong><br/>
-          &nbsp;&nbsp;GTT Target &nbsp;&nbsp;: <strong style="color:var(--green)">₹${target}</strong>
-        </div>
-        <div style="border-top:1px solid var(--border);padding-top:1rem;margin-top:0.5rem">
-          Max loss this trade: <strong style="color:var(--red)">₹${risk}</strong> &nbsp;|&nbsp; 
-          RR: <strong style="color:var(--cyan)">2:1</strong> &nbsp;|&nbsp; 
-          Upside: <strong style="color:var(--green)">${upside}%</strong>
-        </div>
-        <div style="color:var(--gold);font-size:0.72rem;border:1px solid rgba(245,192,24,0.3);padding:1rem;margin-top:0.5rem">
-          ⚠️ Only place order if stock opens ABOVE ₹${entry}<br/>
-          ⚠️ Skip if gap-up &gt; 2% at open<br/>
-          ⚠️ Set GTT immediately after fill<br/>
-          ⚠️ If NIFTY falls &gt;1% at 9:20 AM — pause all orders
-        </div>
-      </div>
-    </div>`;
+/* ─── MARKET LIVE DATA (FINAL) ─── */
+async function loadMarket(){
+
+  try{
+    const res = await fetch(`${API}/market`);
+    const data = await res.json();
+
+    // HERO
+    document.getElementById('nifty-price').textContent = `₹${data.price}`;
+
+    // DASHBOARD
+    document.getElementById('dashboard-nifty-price').textContent = `₹${data.price}`;
+    const trend = data.trend;
+    const color = trend === "UP" ? "lime" : "red";
+    document.getElementById('market-status').textContent = trend;
+    document.getElementById('market-sub').textContent =
+    trend === "UP" ? "Bullish market" : "Bearish market";
+    const dot = document.getElementById('nifty-dot');
+    dot.classList.remove('dot-red','dot-green');
+    if(trend === "UP"){
+      dot.classList.add('dot-green');
+     }else{
+      dot.classList.add('dot-red');
+    } 
+// (verdict)
+ document.getElementById('nifty-verdict').textContent =
+  trend === "UP" ? "BULLISH — market strength" : "BEARISH — market caution";
+
+    // DASHBOARD TREND
+    const trendEl = document.getElementById('market-trend');
+    trendEl.textContent = trend;
+    trendEl.style.color = color;
+
+    document.getElementById('market-note').textContent =
+      trend === "UP" ? "Bullish momentum" : "Bearish pressure";
+
+    document.getElementById('nifty-change').textContent =
+      trend === "UP" ? "▲ Positive" : "▼ Negative";
+
+    document.getElementById('nifty-change').style.color = color;
+
+    // APP MARKET TAB
+    document.getElementById('app-nifty-price').textContent = `₹${data.price}`;
+    document.getElementById('app-market-trend').textContent = trend;
+    document.getElementById('app-market-trend').style.color = color;
+
+  }catch(err){
+    console.log("Market error", err);
+  }
+}
+
+/* CALL MARKET */
+ loadMarket();
+ setInterval(loadMarket, 300000);
+ showTab('signals');
 </script>
 </body>
 </html>
