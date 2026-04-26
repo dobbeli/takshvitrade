@@ -61,9 +61,9 @@
 #         "fetched_at": datetime.now().isoformat(),
 #     }
 
-
 from fastapi import APIRouter
 import feedparser
+from datetime import datetime
 
 router = APIRouter()
 
@@ -74,6 +74,14 @@ RSS_FEEDS = [
     "https://feeds.reuters.com/reuters/businessNews",
     "https://www.livemint.com/rss/markets",
 ]
+
+# 🔥 Safe Time Parser (IMPORTANT for sorting)
+def parse_time(time_str):
+    try:
+        return datetime.strptime(time_str, "%a, %d %b %Y %H:%M:%S %z")
+    except:
+        return datetime.min  # fallback if parsing fails
+
 
 # 🔥 Sentiment Function
 def get_news_sentiment(news_list):
@@ -112,17 +120,27 @@ def get_news():
         feed = feedparser.parse(feed_url)
 
         for entry in feed.entries[:5]:
+            time_str = entry.get("published", "")
+
             news_items.append({
                 "title": entry.title,
                 "link": entry.link,
                 "source": feed.feed.get("title", "Market"),
-                "time": entry.get("published", ""),
+                "time": time_str,
+                "parsed_time": parse_time(time_str)  # for sorting
             })
 
-    # 🔥 Calculate sentiment
+    # 🔥 SORT → Latest first
+    news_items = sorted(news_items, key=lambda x: x["parsed_time"], reverse=True)
+
+    # 🔥 Remove parsed_time before sending
+    for n in news_items:
+        n.pop("parsed_time", None)
+
+    # 🔥 Calculate sentiment AFTER sorting
     sentiment_score = get_news_sentiment(news_items)
 
-    # 🔥 Return BOTH news + sentiment
+    # 🔥 Final response (UI compatible)
     return {
         "news": news_items[:15],
         "sentiment": sentiment_score
