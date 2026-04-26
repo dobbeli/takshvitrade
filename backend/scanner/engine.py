@@ -403,28 +403,22 @@ def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
         }
 
         for future in as_completed(futures):
-            stock = futures[future]
+    stock = futures[future]
 
-            # ⛔ Global timeout check
-            if time.time() - start > MAX_SCAN_TIME:
-                print("⛔ Scan timeout reached, stopping early")
-                break
+    try:
+        r = future.result(timeout=10)
 
-            try:
-                r = future.result(timeout=10)   # ⏱️ per stock timeout
+        print(f"🔥 RESULT RECEIVED for {stock}: {r}")
 
-                print(f"DEBUG RESULT for {stock}: {r}")
+        if r is not None:
+            print(f"✅ APPENDING: {stock}")
+            results.append(r)
+        else:
+            print(f"❌ NONE RESULT: {stock}")
 
-                if r:
-                    print(f"✅ Passed: {stock}")
-                    results.append(r)
-                else:
-                    print(f"❌ Skipped: {stock}")
-
-            except Exception as e:
-                print(f"⛔ Timeout or error in {stock}: {e}")
-                continue
-
+    except Exception as e:
+        print(f"⛔ ERROR in {stock}: {e}")
+        
     # Filter (relaxed for testing)
     results = results
 
