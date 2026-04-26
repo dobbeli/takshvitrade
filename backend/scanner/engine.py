@@ -396,29 +396,19 @@ def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
     MAX_SCAN_TIME = 25   # ⏱️ total scan timeout
 
     # 🔥 Parallel execution
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        futures = {
-            executor.submit(scan_stock, stock, capital, risk_amount): stock
-            for stock in stocks
-        }
+    # 🔥 Sequential execution (FIXED)
+    for stock in stocks:
+        print(f"🚀 Scanning: {stock}")
 
-        for future in as_completed(futures):
-            stock = futures[future]
+    r = scan_stock(stock, capital, risk_amount)
 
-    try:
-        r = future.result(timeout=10)
+    print(f"🔥 RESULT: {r}")
 
-        print(f"🔥 RESULT RECEIVED for {stock}: {r}")
-
-        if r is not None:
-            print(f"✅ APPENDING: {stock}")
-            results.append(r)
-        else:
-            print(f"❌ NONE RESULT: {stock}")
-
-    except Exception as e:
-        print(f"⛔ ERROR in {stock}: {e}")
-
+    if r is not None:
+        print(f"✅ ADDED: {stock}")
+        results.append(r)
+    else:
+        print(f"❌ SKIPPED: {stock}")
     # Filter (relaxed for testing)
     results = results
 
