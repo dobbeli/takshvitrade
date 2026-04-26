@@ -318,7 +318,7 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         else:
             print(f"📊 Data OK: {symbol}, Rows: {len(df)}")
 
-        # ✅ FIXED INDICATOR BLOCK
+        # Indicators
         df = add_indicators(df)
         if df is None:
             print(f"❌ Indicators failed: {symbol}")
@@ -326,79 +326,21 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         else:
             print(f"✅ Indicators OK: {symbol}, rows: {len(df)}")
 
-        score, reasons = score_stock(df)
-
-        # News
-        latest_news = []
-        news_sentiment = get_news_sentiment(latest_news)
-        score += news_sentiment * 2
-
-        if news_sentiment <= -3:
-            print(f"❌ Rejected due to negative news: {symbol}")
-            return None
-
-        print(f"Score: {symbol} = {score}")
-
-        # Trade calculation
-        trade = calculate_trade_levels(df, capital, risk_amount)
-
-        # ✅ FIXED TRADE LOGIC
-        if trade is None:
-            print(f"⚠️ Trade failed, using fallback: {symbol}")
-            latest = df.iloc[-1]
-
-            trade = {
-                "entry": float(latest["Close"]),
-                "stop": float(latest["Close"]) * 0.97,
-                "target": float(latest["Close"]) * 1.05,
-                "qty": 1,
-                "position": float(latest["Close"]),
-                "atr": 0,
-                "rr": 1.2
-            }
-
-        # Common calculations
+        # 👉 FORCE RETURN TEST (IMPORTANT)
         latest = df.iloc[-1]
-        prev   = df.iloc[-2]
 
-        ema20  = float(latest["EMA20"])
-        ema50  = float(latest["EMA50"])
-        ema200 = float(latest["EMA200"])
-        rsi    = float(latest["RSI"])
-        vol    = float(latest["Volume"])
-        vsma   = float(latest["VOL_SMA"])
-
-        checklist = {
-            "ema_stack":    bool(ema20 > ema50 > ema200),
-            "ema20_rising": is_ema20_rising(df),
-            "rsi_healthy":  bool(50 < rsi < 70),
-            "volume_above": bool(vol > vsma),
-            "candle_ok":    get_candle_type(latest) != "Bearish",
-            "pullback":     is_pullback_to_ema20(df),
-        }
-
-        checks_passed = sum(checklist.values())
-
-        upside_pct = round(((trade["target"] - trade["entry"]) / trade["entry"]) * 100, 2)
+        print(f"🔥 FINAL RETURN HIT: {symbol}")
 
         return {
             "stock": symbol.replace(".NS", ""),
-            "close": round(float(latest["Close"]), 2),
-            "prev_high": round(float(prev["High"]), 2),
-            "prev_low": round(float(prev["Low"]), 2),
-            "entry": trade["entry"],
-            "stop_loss": trade["stop"],
-            "target": trade["target"],
-            "qty": trade["qty"],
-            "position": trade["position"],
-            "atr": trade["atr"],
-            "rr": trade["rr"],
-            "score": score,
-            "news_score": news_sentiment,
-            "upside_pct": upside_pct,
-            "reasons": reasons,
-            "checklist": checklist,
-            "checks_passed": checks_passed,
+            "close": float(latest["Close"]),
+            "entry": float(latest["Close"]),
+            "stop_loss": float(latest["Close"]) * 0.97,
+            "target": float(latest["Close"]) * 1.05,
+            "qty": 1,
+            "position": float(latest["Close"]),
+            "rr": 1.2,
+            "score": 50
         }
 
     except Exception as e:
