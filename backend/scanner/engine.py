@@ -54,7 +54,7 @@ def get_stock_data(symbol: str) -> Optional[pd.DataFrame]:
 
             df = yf.download(
                 symbol,
-                period="1y",
+                period="6mo",
                 interval="1d",
                 progress=False,
                 auto_adjust=True,
@@ -102,13 +102,8 @@ def get_stock_data(symbol: str) -> Optional[pd.DataFrame]:
         # ✅ Drop NaN rows
         df = df.dropna()
 
-        # ✅ Minimum data check (EMA 200 safe)
-        if len(df) < 200:
-            print(f"❌ Not enough data for {symbol}")
-            return None
-
         print(f"✅ Data OK: {symbol} | Rows: {len(df)}")
-
+        df = df.tail(200)
         return df
 
     except Exception as e:
