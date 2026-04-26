@@ -2,9 +2,22 @@
 Takshvi Trade — Core Scanner Engine
 Integrates user's Block 4–7 scanner code into FastAPI
 """
+import time
+import logging
 import yfinance as yf
 import pandas as pd
-import numpy as np
+import random
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)
+#GLOBAL FUNCTION
+def flatten_columns(df):
+    if isinstance(df.columns, pd.MultiIndex):
+        df.columns = df.columns.get_level_values(0)
+    return df
+import requests
+session = requests.Session()
+session.headers.update({
+    "User-Agent": "Mozilla/5.0"
+})
 import ta
 from datetime import datetime
 from typing import Optional
@@ -27,32 +40,79 @@ NIFTY50_STOCKS = [
     "APOLLOHOSP","BAJAJ-AUTO","BRITANNIA","HDFCLIFE","UPL"
 ]
 
-
 # ── BLOCK 4: Download price history ─────────────────────────
 def get_stock_data(symbol: str) -> Optional[pd.DataFrame]:
-    try:
-        df = yf.download(
-            symbol, period="2y", interval="1d",
-            progress=False, auto_adjust=True, threads=False
-        )
-        if df is None or df.empty:
-            return None
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [col[0] for col in df.columns]
-        df = df.loc[:, ~df.columns.duplicated()]
-        required = ["Open", "High", "Low", "Close", "Volume"]
-        if not all(c in df.columns for c in required):
-            return None
-        df = df[required].copy()
-        for col in required:
-            df[col] = pd.to_numeric(df[col].values.flatten(), errors="coerce")
-        df = df.dropna()
-        if len(df) < 210:
-            return None
-        return df
-    except Exception:
+    df = None
+    
+    # 🔁 Retry logic (3 attempts)
+    for i in range(3):
+        try:
+            print(f"Trying fetch: {symbol}")
+            
+            time.sleep(random.uniform(0.8, 1.5)) 
+
+            df = yf.download(
+                symbol,
+                period="2y",
+                interval="1d",
+                progress=False,
+                auto_adjust=True,
+                threads=False
+            )
+
+            if df is not None and not df.empty:
+                break
+            else:
+                print(f"⚠️ Empty response, retrying... ({i+1})")
+                time.sleep(random.uniform(1.0, 2.0))  # 🔥 ADD THIS
+
+        except Exception as e:
+            print(f"⚠️ Fetch error for {symbol}: {e}")
+            df = None
+            time.sleep(random.uniform(1.0, 2.0)) 
+
+    # ❌ If still empty → reject
+    if df is None or df.empty:
+        print(f"❌ Yahoo returned empty for {symbol}")
         return None
 
+    try:
+        # ✅ Flatten columns (IMPORTANT FIX)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+
+        # ✅ Remove duplicate columns
+        df = df.loc[:, ~df.columns.duplicated()]
+
+        # ✅ Required columns check
+        required = ["Open", "High", "Low", "Close", "Volume"]
+        if not all(col in df.columns for col in required):
+            print(f"❌ Missing required columns for {symbol}")
+            return None
+
+        # ✅ Keep only required columns
+        df = df[required].copy()
+
+        # ✅ Convert to numeric
+        for col in required:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        # ✅ Drop NaN rows
+        df = df.dropna()
+
+        # ✅ Minimum data check (EMA 200 safe)
+        if len(df) < 200:
+            print(f"❌ Not enough data for {symbol}")
+            return None
+
+        print(f"✅ Data OK: {symbol} | Rows: {len(df)}")
+
+        return df
+
+    except Exception as e:
+        print(f"❌ Processing error for {symbol}: {e}")
+        return None
+    
 
 # ── BLOCK 5: Technical indicators ────────────────────────────
 def add_indicators(df: pd.DataFrame) -> Optional[pd.DataFrame]:
@@ -86,79 +146,98 @@ def add_indicators(df: pd.DataFrame) -> Optional[pd.DataFrame]:
 
 # ── BLOCK 6: Scoring system ───────────────────────────────────
 def score_stock(df: pd.DataFrame):
-    latest  = df.iloc[-1]
-    score   = 0
+    latest = df.iloc[-1]
+    prev   = df.iloc[-2]
+
+    score = 0
     reasons = []
 
-    # Trend (40 pts)
-    if latest["EMA20"] > latest["EMA50"] > latest["EMA200"]:
-        score += 40; reasons.append("✅ Full EMA stack (20>50>200)")
-    elif latest["EMA20"] > latest["EMA50"]:
-        score += 25; reasons.append("⚠️ Partial trend (20>50 only)")
-    elif latest["EMA50"] > latest["EMA200"]:
-        score += 10; reasons.append("⚠️ Weak trend (50>200 only)")
-    else:
-        score += 0      # ← Allow weak stocks through, score will be low
-        reasons.append("❌ No EMA alignment")
-    # Remove the hard return 0 — let other factors decide
+    ema20  = float(latest["EMA20"])
+    ema50  = float(latest["EMA50"])
+    ema200 = float(latest["EMA200"])
+    rsi    = float(latest["RSI"])
+    vol    = float(latest["Volume"])
+    vsma   = float(latest["VOL_SMA"])
 
-    # RSI (20 pts)
-    rsi = latest["RSI"]
-    if 55 < rsi < 70:
-        score += 20; reasons.append(f"✅ RSI strong ({rsi:.0f})")
-    elif 45 < rsi <= 55:
-        score += 12; reasons.append(f"⚠️ RSI neutral ({rsi:.0f})")
-    elif 40 < rsi <= 45:
-        score += 5;  reasons.append(f"⚠️ RSI soft ({rsi:.0f})")
-    elif rsi >= 70:
-        score -= 5;  reasons.append(f"⚠️ RSI overbought ({rsi:.0f})")
+    # TREND
+    if ema20 > ema50 > ema200:
+        score += 30
+        reasons.append("Uptrend")
     else:
         return 0, []
 
-    # Volume (20 pts)
-    vol_ratio = latest["Volume"] / latest["VOL_SMA"] if latest["VOL_SMA"] > 0 else 0
-    if vol_ratio >= 1.5:
-        score += 20; reasons.append(f"✅ Volume surge ({vol_ratio:.1f}x)")
-    elif vol_ratio >= 1.0:
-        score += 12; reasons.append(f"⚠️ Volume average ({vol_ratio:.1f}x)")
-    elif vol_ratio >= 0.7:
-        score += 5;  reasons.append(f"⚠️ Volume soft ({vol_ratio:.1f}x)")
+    # PULLBACK
+    pullback = abs(latest["Close"] - ema20) / ema20
+    if pullback <= 0.03:
+        score += 20
+        reasons.append("Near EMA20")
 
-    # 52W High proximity (20 pts)
-    proximity = latest["Close"] / latest["HIGH_52W"] if latest["HIGH_52W"] > 0 else 0
-    if proximity >= 0.95:
-        score += 20; reasons.append(f"✅ Near 52W high ({proximity*100:.0f}%)")
-    elif proximity >= 0.85:
-        score += 12; reasons.append(f"⚠️ Moderate from 52W high ({proximity*100:.0f}%)")
-    elif proximity >= 0.75:
-        score += 5;  reasons.append(f"⚠️ Away from 52W high ({proximity*100:.0f}%)")
+    # MOMENTUM
+    if latest["Close"] > prev["Close"]:
+        score += 15
+        reasons.append("Bullish candle")
 
-    if score < 25:
-        return 0, []
+    # RSI
+    if 50 < rsi < 70:
+        score += 15
+        reasons.append("Healthy RSI")
+
+    # VOLUME
+    if vsma > 0 and vol > vsma:
+        score += 10
+        reasons.append("Volume support")
+
+    # EMA slope
+    if df["EMA20"].iloc[-1] > df["EMA20"].iloc[-2]:
+        score += 10
+        reasons.append("EMA rising")
+
     return score, reasons
-
 
 # ── BLOCK 7: Trade level calculator ──────────────────────────
 def calculate_trade_levels(df: pd.DataFrame, capital=CAPITAL, risk_amount=RISK_AMOUNT):
+    if len(df) < 3:
+        return None
+
     latest = df.iloc[-1]
-    close  = float(latest["Close"])
-    atr    = float(latest["ATR"])
+    prev   = df.iloc[-2]
+
+    close = float(latest["Close"])
+    atr   = float(latest["ATR"])
+
     if atr <= 0 or close <= 0:
         return None
 
-    entry  = round(close * 1.002, 2)
-    stop   = round(entry - 1.5 * atr, 2)
+    # ── Entry (breakout above previous high)
+    entry = round(float(prev["High"]) * 1.001, 2)
+
+    # ── Stop loss (ATR based)
+    stop = round(entry - 1.5 * atr, 2)
+
+    # ── Target (2R–3R zone)
     target = round(entry + 3.0 * atr, 2)
-    risk   = entry - stop
 
-    if risk <= 0: return None
+    # ── Risk per share
+    risk = entry - stop
+    if risk <= 0:
+        return None
 
-    qty = int(risk_amount / risk)
-    if qty <= 0: return None
+    # ── Risk-Reward check
+    rr = (target - entry) / risk
+    if rr < 1.5:
+        return None
 
-    if entry * qty > capital * 0.20:
-        qty = int((capital * 0.20) / entry)
-    if qty <= 0: return None
+    # ── Position sizing (BEST PRACTICE)
+    # Risk-based qty
+    qty_risk = risk_amount / risk
+
+    # Capital cap (20% allocation per trade)
+    qty_cap = (capital * 0.20) / entry
+
+    # Final qty
+    qty = int(min(qty_risk, qty_cap))
+    if qty <= 0:
+        return None
 
     return {
         "entry":    entry,
@@ -166,7 +245,7 @@ def calculate_trade_levels(df: pd.DataFrame, capital=CAPITAL, risk_amount=RISK_A
         "target":   target,
         "qty":      qty,
         "atr":      round(atr, 2),
-        "rr":       round((target - entry) / risk, 2),
+        "rr":       round(rr, 2),
         "position": round(entry * qty, 2)
     }
 
@@ -191,16 +270,57 @@ def is_pullback_to_ema20(df: pd.DataFrame) -> bool:
     ema20 = float(r["EMA20"])
     return float(r["Low"]) <= ema20 * 1.02 and float(r["Close"]) > ema20
 
+    #  ADD BELOW IMPORTS OR ABOVE scan_stock()
+
+def get_news_sentiment(news_list):
+    positive_keywords = [
+        "growth", "profit", "bullish", "strong", "upgrade",
+        "record", "expansion", "beat", "surge", "positive"
+    ]
+
+    negative_keywords = [
+        "loss", "decline", "bearish", "weak", "downgrade",
+        "fall", "drop", "miss", "crash", "negative"
+    ]
+
+    score = 0
+
+    for news in news_list:
+        text = news.get("title", "").lower()
+
+        for word in positive_keywords:
+            if word in text:
+                score += 1
+
+        for word in negative_keywords:
+            if word in text:
+                score -= 1
+
+    return score
+
 
 # ── Full pipeline: scan one stock ────────────────────────────
 def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optional[dict]:
     try:
         df = get_stock_data(symbol)
-        if df is None: return None
+        if df is None:
+          print(f"⚠️ Data fetch failed: {symbol}")
+          return None
+        else:
+          print(f"📊 Data OK: {symbol}, Rows: {len(df)}")
         df = add_indicators(df)
         if df is None: return None
         score, reasons = score_stock(df)
-        if score == 0: return None
+
+        latest_news = []   
+        news_sentiment = get_news_sentiment(latest_news)
+        score += news_sentiment * 2
+
+        if news_sentiment <= -3:
+            print(f"❌ Rejected due to negative news: {symbol}")
+            return None
+
+        print(f"Score: {symbol} = {score}")
         trade = calculate_trade_levels(df, capital, risk_amount)
         if trade is None: return None
 
@@ -210,7 +330,6 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         if abs(trade["entry"] - float(latest["Close"])) / float(latest["Close"]) > 0.05:
             return None
 
-        # Pre-approval checklist
         ema20  = float(latest["EMA20"])
         ema50  = float(latest["EMA50"])
         ema200 = float(latest["EMA200"])
@@ -242,6 +361,7 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             "atr":            trade["atr"],
             "rr":             trade["rr"],
             "score":          score,
+            "news_score":     news_sentiment,
             "upside_pct":     upside_pct,
             "reasons":        reasons,
             "checklist":      checklist,
@@ -253,6 +373,7 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             "vol_ratio":      round(vol / vsma, 2) if vsma > 0 else 0,
             "candle":         get_candle_type(latest),
             "scanned_at":     datetime.now().isoformat(),
+            
         }
     except Exception as e:
         print(f"⚠️ Error scanning {symbol}: {e}")
@@ -268,7 +389,10 @@ def check_market_status() -> dict:
             return {"bullish": True, "error": "Could not fetch NIFTY"}
 
         if isinstance(df.columns, pd.MultiIndex):
-            df.columns = [col[0] for col in df.columns]
+            df.columns = df.columns.get_level_values(0)
+
+            df = df.loc[:, ~df.columns.duplicated()]
+        print("NIFTY DF COLUMNS:", df.columns.tolist())
 
         close  = pd.Series(df["Close"].values.flatten(), index=df.index, dtype=float)
         ema50  = float(ta.trend.ema_indicator(close, window=50).iloc[-1])
@@ -297,9 +421,28 @@ def check_market_status() -> dict:
 def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
     results = []
     stocks  = [s + ".NS" for s in NIFTY50_STOCKS]
+
     for stock in stocks:
+        print(f"🔍 Scanning: {stock}")
+
         r = scan_stock(stock, capital, risk_amount)
+
         if r:
+            print(f"✅ Passed: {stock}")
             results.append(r)
+        else:
+            print(f"❌ Skipped: {stock}")
+
+        time.sleep(random.uniform(1.0, 2.0))   # 🔥 FIXED
+
+    # 🔥 RELAX FILTER (TEMP)
+    results = [r for r in results if r["score"] >= 70]
+
+    print(f"📊 Total Passed Stocks: {len(results)}")
+
+    if not results:
+        print("⚠️ No stocks passed filter")
+
     results.sort(key=lambda x: x["score"], reverse=True)
-    return results
+
+    return results[:MAX_POSITIONS]
