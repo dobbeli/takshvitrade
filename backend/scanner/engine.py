@@ -52,15 +52,12 @@ def get_stock_data(symbol: str) -> Optional[pd.DataFrame]:
         try:
             print(f"Trying fetch: {symbol}")
 
-            df = yf.download(
-                symbol,
-                period="6mo",
-                interval="1d",
-                progress=False,
-                auto_adjust=True,
-                threads=False
-            )
+            ticker = yf.Ticker(symbol)
 
+            df = ticker.history(
+                period="6mo",
+                interval="1d"
+            )
             if df is not None and not df.empty:
                 break
             else:
@@ -407,7 +404,7 @@ def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
         else:
             print(f"❌ SKIPPED: {stock}")
 
-        time.sleep(0.5)   # prevent Yahoo blocking # 🔥 important for yfinance
+        time.sleep(1)   # prevent Yahoo blocking # 🔥 important for yfinance
     results = results
 
     print(f"📊 Total Passed Stocks: {len(results)}")
