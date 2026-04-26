@@ -389,6 +389,7 @@ def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
 
     results = []
     stocks  = [s + ".NS" for s in NIFTY50_STOCKS]
+    print(f"🔥 TOTAL STOCKS: {len(stocks)}")
 
     print(f"🚀 Running parallel scan for {len(stocks)} stocks...")
 
