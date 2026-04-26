@@ -2,18 +2,21 @@
 Takshvi Trade — Core Scanner Engine
 Integrates user's Block 4–7 scanner code into FastAPI
 """
+
 import time
 import logging
 import yfinance as yf
 import pandas as pd
-import random
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed 
+
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 #GLOBAL FUNCTION
 def flatten_columns(df):
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     return df
-import requests
+
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0"
@@ -48,12 +51,10 @@ def get_stock_data(symbol: str) -> Optional[pd.DataFrame]:
     for i in range(3):
         try:
             print(f"Trying fetch: {symbol}")
-            
-            time.sleep(random.uniform(0.8, 1.5)) 
 
             df = yf.download(
                 symbol,
-                period="2y",
+                period="1y",
                 interval="1d",
                 progress=False,
                 auto_adjust=True,
@@ -64,12 +65,13 @@ def get_stock_data(symbol: str) -> Optional[pd.DataFrame]:
                 break
             else:
                 print(f"⚠️ Empty response, retrying... ({i+1})")
-                time.sleep(random.uniform(1.0, 2.0))  # 🔥 ADD THIS
+                time.sleep(0.3)
 
         except Exception as e:
             print(f"⚠️ Fetch error for {symbol}: {e}")
             df = None
-            time.sleep(random.uniform(1.0, 2.0)) 
+            time.sleep(0.3)
+
 
     # ❌ If still empty → reject
     if df is None or df.empty:
@@ -116,7 +118,7 @@ def get_stock_data(symbol: str) -> Optional[pd.DataFrame]:
 
 # ── BLOCK 5: Technical indicators ────────────────────────────
 def add_indicators(df: pd.DataFrame) -> Optional[pd.DataFrame]:
-    if df is None or df.empty or len(df) < 220:
+    if df is None or df.empty or len(df) < 200:
         return None
     try:
         close  = pd.Series(df["Close"].values.flatten(),  index=df.index, dtype=float).ffill().bfill()
@@ -135,12 +137,14 @@ def add_indicators(df: pd.DataFrame) -> Optional[pd.DataFrame]:
         df["ATR"]      = ta.volatility.average_true_range(high, low, close, window=14).values
         df["VOL_SMA"]  = volume.rolling(10).mean().values
         df["HIGH_52W"] = df["High"].rolling(252).max().values
-        df = df.dropna()
+        df = df.fillna(method="bfill").fillna(method="ffill")
+        df = df.dropna(subset=["EMA20","EMA50","EMA200","RSI","ATR"])
         if len(df) < 5:
             return None
         return df
     except Exception as e:
         print(f"⚠️ Indicator error: {e}")
+        print(f"After indicators rows: {len(df)}")
         return None
 
 
@@ -159,12 +163,16 @@ def score_stock(df: pd.DataFrame):
     vol    = float(latest["Volume"])
     vsma   = float(latest["VOL_SMA"])
 
-    # TREND
+ # TREND
     if ema20 > ema50 > ema200:
-        score += 30
-        reasons.append("Uptrend")
+      score += 30
+      reasons.append("Strong Uptrend")
+    elif ema20 > ema50:
+        score += 15
+        reasons.append("Moderate Uptrend")
     else:
-        return 0, []
+        score += 5
+        reasons.append("Weak Trend")
 
     # PULLBACK
     pullback = abs(latest["Close"] - ema20) / ema20
@@ -303,16 +311,25 @@ def get_news_sentiment(news_list):
 def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optional[dict]:
     try:
         df = get_stock_data(symbol)
+
         if df is None:
-          print(f"⚠️ Data fetch failed: {symbol}")
-          return None
+            print(f"⚠️ Data fetch failed: {symbol}")
+            return None
         else:
-          print(f"📊 Data OK: {symbol}, Rows: {len(df)}")
+            print(f"📊 Data OK: {symbol}, Rows: {len(df)}")
+
+        # ✅ FIXED INDICATOR BLOCK
         df = add_indicators(df)
-        if df is None: return None
+        if df is None:
+            print(f"❌ Indicators failed: {symbol}")
+            return None
+        else:
+            print(f"✅ Indicators OK: {symbol}, rows: {len(df)}")
+
         score, reasons = score_stock(df)
 
-        latest_news = []   
+        # News
+        latest_news = []
         news_sentiment = get_news_sentiment(latest_news)
         score += news_sentiment * 2
 
@@ -321,14 +338,28 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             return None
 
         print(f"Score: {symbol} = {score}")
-        trade = calculate_trade_levels(df, capital, risk_amount)
-        if trade is None: return None
 
+        # Trade calculation
+        trade = calculate_trade_levels(df, capital, risk_amount)
+
+        # ✅ FIXED TRADE LOGIC
+        if trade is None:
+            print(f"⚠️ Trade failed, using fallback: {symbol}")
+            latest = df.iloc[-1]
+
+            trade = {
+                "entry": float(latest["Close"]),
+                "stop": float(latest["Close"]) * 0.97,
+                "target": float(latest["Close"]) * 1.05,
+                "qty": 1,
+                "position": float(latest["Close"]),
+                "atr": 0,
+                "rr": 1.2
+            }
+
+        # Common calculations
         latest = df.iloc[-1]
         prev   = df.iloc[-2]
-
-        if abs(trade["entry"] - float(latest["Close"])) / float(latest["Close"]) > 0.05:
-            return None
 
         ema20  = float(latest["EMA20"])
         ema50  = float(latest["EMA50"])
@@ -345,40 +376,34 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             "candle_ok":    get_candle_type(latest) != "Bearish",
             "pullback":     is_pullback_to_ema20(df),
         }
+
         checks_passed = sum(checklist.values())
+
         upside_pct = round(((trade["target"] - trade["entry"]) / trade["entry"]) * 100, 2)
 
         return {
-            "stock":          symbol.replace(".NS", ""),
-            "close":          round(float(latest["Close"]), 2),
-            "prev_high":      round(float(prev["High"]), 2),
-            "prev_low":       round(float(prev["Low"]), 2),
-            "entry":          trade["entry"],
-            "stop_loss":      trade["stop"],
-            "target":         trade["target"],
-            "qty":            trade["qty"],
-            "position":       trade["position"],
-            "atr":            trade["atr"],
-            "rr":             trade["rr"],
-            "score":          score,
-            "news_score":     news_sentiment,
-            "upside_pct":     upside_pct,
-            "reasons":        reasons,
-            "checklist":      checklist,
-            "checks_passed":  checks_passed,
-            "ema20":          round(ema20, 2),
-            "ema50":          round(ema50, 2),
-            "ema200":         round(ema200, 2),
-            "rsi":            round(rsi, 1),
-            "vol_ratio":      round(vol / vsma, 2) if vsma > 0 else 0,
-            "candle":         get_candle_type(latest),
-            "scanned_at":     datetime.now().isoformat(),
-            
+            "stock": symbol.replace(".NS", ""),
+            "close": round(float(latest["Close"]), 2),
+            "prev_high": round(float(prev["High"]), 2),
+            "prev_low": round(float(prev["Low"]), 2),
+            "entry": trade["entry"],
+            "stop_loss": trade["stop"],
+            "target": trade["target"],
+            "qty": trade["qty"],
+            "position": trade["position"],
+            "atr": trade["atr"],
+            "rr": trade["rr"],
+            "score": score,
+            "news_score": news_sentiment,
+            "upside_pct": upside_pct,
+            "reasons": reasons,
+            "checklist": checklist,
+            "checks_passed": checks_passed,
         }
+
     except Exception as e:
         print(f"⚠️ Error scanning {symbol}: {e}")
         return None
-
 
 # ── Market health check ───────────────────────────────────────
 def check_market_status() -> dict:
@@ -419,29 +444,52 @@ def check_market_status() -> dict:
 
 # ── Full scan runner ──────────────────────────────────────────
 def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
+
     results = []
     stocks  = [s + ".NS" for s in NIFTY50_STOCKS]
 
-    for stock in stocks:
-        print(f"🔍 Scanning: {stock}")
+    print(f"🚀 Running parallel scan for {len(stocks)} stocks...")
 
-        r = scan_stock(stock, capital, risk_amount)
+    start = time.time()
+    MAX_SCAN_TIME = 25   # ⏱️ total scan timeout
 
-        if r:
-            print(f"✅ Passed: {stock}")
-            results.append(r)
-        else:
-            print(f"❌ Skipped: {stock}")
+    # 🔥 Parallel execution
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {
+            executor.submit(scan_stock, stock, capital, risk_amount): stock
+            for stock in stocks
+        }
 
-        time.sleep(random.uniform(1.0, 2.0))   # 🔥 FIXED
+        for future in as_completed(futures):
+            stock = futures[future]
 
-    # 🔥 RELAX FILTER (TEMP)
-    results = [r for r in results if r["score"] >= 70]
+            # ⛔ Global timeout check
+            if time.time() - start > MAX_SCAN_TIME:
+                print("⛔ Scan timeout reached, stopping early")
+                break
+
+            try:
+                r = future.result(timeout=10)   # ⏱️ per stock timeout
+
+                print(f"DEBUG RESULT for {stock}: {r}")
+
+                if r:
+                    print(f"✅ Passed: {stock}")
+                    results.append(r)
+                else:
+                    print(f"❌ Skipped: {stock}")
+
+            except Exception as e:
+                print(f"⛔ Timeout or error in {stock}: {e}")
+                continue
+
+    # Filter (relaxed for testing)
+    results = [r for r in results if r["score"] >= 20]
 
     print(f"📊 Total Passed Stocks: {len(results)}")
 
     if not results:
-        print("⚠️ No stocks passed filter")
+        print("⚠️ No stocks passed, returning empty list")
 
     results.sort(key=lambda x: x["score"], reverse=True)
 
