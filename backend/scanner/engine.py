@@ -399,7 +399,8 @@ def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
     # 🔥 Parallel execution
     # 🔥 Sequential execution (FIXED)
     for stock in stocks:
-        print(f"🚀 Scanning: {stock}")
+        print(f"🚀 LOOP RUNNING: {stock}")
+        
 
     r = scan_stock(stock, capital, risk_amount)
 
