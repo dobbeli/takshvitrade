@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Takshvi Trade — NSE Signal Intelligence</title>
+<script src="https://s3.tradingview.com/tv.js"></script>
 <meta name="description" content="ATR-based swing signals, multi-factor scoring, and trade order sheets for Indian retail traders."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
@@ -253,19 +254,130 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 .app-card-val.c{color:var(--cyan)}
 .app-card-sub{font-family:var(--font-mono);font-size:0.62rem;color:var(--muted);margin-top:0.3rem}
 
-/* app signal table */
-.app-table{background:var(--card);border:1px solid var(--border);overflow:hidden;margin-bottom:1.5rem}
-.app-table-head{display:grid;grid-template-columns:1.5fr 0.7fr 0.9fr 0.9fr 0.9fr 0.7fr 0.9fr 1.2fr;padding:0.8rem 1.2rem;background:var(--dark);border-bottom:1px solid var(--border)}
-.app-table-head span{font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted)}
-.app-row{display:grid;grid-template-columns:1.5fr 0.7fr 0.9fr 0.9fr 0.9fr 0.7fr 0.9fr 1.2fr;padding:1rem 1.2rem;border-bottom:1px solid var(--border);align-items:center;transition:background 0.2s}
-.app-row:hover{background:rgba(0,229,200,0.03)}
-.app-row:last-child{border-bottom:none}
-.ar-stock{font-family:var(--font-display);font-weight:700;font-size:0.9rem;color:var(--white)}
-.ar-score{font-family:var(--font-mono);font-size:0.78rem;color:var(--cyan)}
-.ar-val{font-family:var(--font-mono);font-size:0.75rem;color:var(--text)}
-.ar-btn{font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;padding:0.3rem 0.7rem;background:rgba(0,229,200,0.08);border:1px solid rgba(0,229,200,0.25);color:var(--cyan);cursor:pointer;transition:all 0.2s}
-.ar-btn:hover{background:rgba(0,229,200,0.15)}
+/* news card */
+.news-card {
+  background:#0d1117;
+  border:1px solid #1e2836;
+  padding:16px;
+  border-radius:8px;
+  cursor:pointer;
+  transition:all 0.2s ease;
+}
 
+/* app signal table */
+
+.app-table{
+  background:var(--card);
+  border:1px solid var(--border);
+  overflow:hidden;
+  margin-bottom:1.5rem;
+}
+
+/* HEADER */
+.app-table-head{
+  display:grid;
+  grid-template-columns:1.6fr 0.8fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1.2fr;
+  padding:1rem 1.2rem;
+  background:var(--dark);
+  border-bottom:1px solid var(--border);
+}
+.app-table-head span{
+  font-family:var(--font-mono);
+  font-size:0.65rem;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  color:var(--muted);
+  text-align:center;
+}
+/* FIRST COLUMN LEFT */
+.app-table-head span:first-child{
+  text-align:left;
+  padding-left:10px;
+}
+
+/* ROW */
+.app-row{
+  display:grid;
+  grid-template-columns:1.6fr 0.8fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1.2fr;
+  padding:1rem 1.2rem;
+  border-bottom:1px solid var(--border);
+  align-items:center;
+  /*transition:background 0.2s;*/
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.app-row:hover{
+  /*background:rgba(255,255,255,0.04);*/
+  background: rgba(0, 229, 200, 0.08);
+}
+.app-row:hover .ar-stock {
+    color: #00E5C8;
+}
+.app-row:last-child{
+  border-bottom:none;
+}
+/* STOCK */
+.ar-stock{
+  font-family:var(--font-display);
+  font-weight:700;
+  font-size:0.95rem;
+  color:var(--white);
+  text-align:left;
+  padding-left:10px;
+}
+.ar-stock:hover{
+  color: var(--cyan);
+  cursor: pointer;
+}
+/* SCORE */
+.ar-score{
+  font-family:var(--font-mono);
+  font-size:0.8rem;
+  color:var(--cyan);
+  text-align:center;
+}
+
+/* VALUES */
+.ar-val{
+  font-family:var(--font-mono);
+  font-size:0.82rem;
+  color:var(--text);
+  text-align:center;
+}
+
+.ar-val button {
+  width: 100%;
+}
+/* ENTRY / SL / TARGET COLORS */
+.ar-entry{
+  color:#cfd8dc;
+}
+.ar-sl{
+  color:#ff4d4f;
+  font-weight:500;
+}
+.ar-target{
+  color:#00e676;
+  font-weight:500;
+}
+/* BUTTON */
+.ar-btn{
+  font-family:var(--font-mono);
+  font-size:0.65rem;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  padding:0.4rem 0.8rem;
+  background:rgba(0,229,200,0.08);
+  border:1px solid rgba(0,229,200,0.25);
+  color:var(--cyan);
+  cursor:pointer;
+  transition:all 0.2s;
+  text-align:center;
+}
+.ar-btn:hover{
+  background:rgba(0,229,200,0.2);
+}
 /* scan button */
 .scan-btn{display:flex;align-items:center;gap:0.8rem;background:var(--cyan);color:var(--black);font-family:var(--font-display);font-weight:700;font-size:0.88rem;padding:0.9rem 2rem;border:none;cursor:pointer;transition:all 0.2s;margin-bottom:1.5rem}
 .scan-btn:hover{background:var(--green)}
@@ -631,22 +743,16 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
       <span>Target ₹</span>
       <span>RR</span>
       <span>Qty</span>
+      <span>Position ₹</span>  
       <span>Action</span>
     </div>
-    <table style="width:100%;border-collapse:collapse">
-      <tbody id="signals-tbody">
-        <tr>
-          <td colspan="8"
-              style="text-align:center;padding:2rem;color:var(--muted);
-                     font-family:var(--font-mono);font-size:0.75rem">
-            Click Run Scanner to load live signals
-          </td>
-        </tr>
-      </tbody>
-    </table>
+<div id="signals-body">
+    <div style="text-align:center;padding:2rem;color:var(--muted);font-family:var(--font-mono);font-size:0.75rem">
+    Click Run Scanner to load live signals
+    </div>
   </div>
-</div>
-
+  </div>
+  </div>
     <!-- Market Tab -->
   <div id="tab-market" style="display:none">
    <div class="app-grid">
@@ -683,27 +789,54 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
       </div>
     </div>
 
-    <!-- News Tab -->
     <div id="tab-news" style="display:none">
-      <div class="app-table" style="padding:2rem">
-        <div style="font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--white);margin-bottom:1.5rem">📰 Market News Sentiment</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.5rem">
-          <div class="app-card"><div class="app-card-label">Positive Signals</div><div class="app-card-val g">4</div></div>
-          <div class="app-card"><div class="app-card-label">Negative Signals</div><div class="app-card-val r">7</div></div>
-          <div class="app-card"><div class="app-card-label">Verdict</div><div class="app-card-val" style="font-size:1.1rem;color:var(--gold)">MIXED</div></div>
-        </div>
-        <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--muted);line-height:2">
-          Sources: Economic Times Markets · Moneycontrol · Reuters Business · Mint Markets<br/>
-          Recommendation: <span style="color:var(--gold)">Stick to highest-score trades only</span>
-        </div>
-      </div>
+
+  <!-- 🔥 MARKET SENTIMENT FIRST -->
+  <div class="app-table" style="padding:2rem">
+    <div style="font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--white);margin-bottom:1.5rem">
+      📰 Market News Sentiment
     </div>
 
+    <!-- SENTIMENT CARDS -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+
+      <div class="app-card">
+        <div class="app-card-label">Positive Signals</div>
+        <div class="app-card-val g" id="positive-news">0</div>
+      </div>
+
+      <div class="app-card">
+        <div class="app-card-label">Negative Signals</div>
+        <div class="app-card-val r" id="negative-news">0</div>
+      </div>
+
+      <div class="app-card">
+        <div class="app-card-label">Verdict</div>
+        <div class="app-card-val" id="news-verdict">--</div>
+      </div>
+
+    </div>
+
+    <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--muted);line-height:2">
+      Sources: Economic Times · Moneycontrol · Reuters · Mint<br/>
+      Recommendation: <span style="color:var(--gold)">Stick to highest-score trades only</span>
+    </div>
   </div>
+
+  <!-- 🔥 THEN TOP STORIES -->
+  <h2 style="margin:30px 0 10px 0;">Top stories</h2>
+
+  <div id="news-container" style="
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap:20px;
+  "></div>
 </div>
 
 <script>
 /* ─── Cursor ─── */
+const API = "https://takshvitrade-api.onrender.com";
+
 const cur = document.getElementById('cursor');
 const ring = document.getElementById('cursor-ring');
 let mx=0,my=0,rx=0,ry=0;
@@ -757,28 +890,147 @@ function closeApp(){
 }
 /* ─── Tabs ─── */
 function showTab(name){
+  console.log("TAB CLICKED:", name);
+
   ['signals','market','trade','news'].forEach(t=>{
     const el = document.getElementById('tab-'+t);
     if(el){
       el.style.display = t===name ? 'block' : 'none';
     }
   });
+
   document.querySelectorAll('.app-tab').forEach((btn,i)=>{
     btn.classList.toggle('active',['signals','market','trade','news'][i]===name);
   });
+
+  // 🔥 THIS IS MISSING — ADD IT
+  if(name === "news"){
+    console.log("NEWS FUNCTION TRIGGERED");
+    loadNews();
+  }
 }
 
-/* ─── API CONFIG ─── */
-const API = 'https://takshvitrade-api.onrender.com';
+function formatTime(raw){
+  try{
+    const d = new Date(raw);
+    return d.toLocaleString("en-IN", {
+      day:"2-digit",
+      month:"short",
+      hour:"2-digit",
+      minute:"2-digit"
+    });
+  }catch{
+    return raw || "";
+  }
+}
+  let newsLoaded = false;
 
+async function loadNews(){
+  if(newsLoaded) return;
+
+  console.log("NEWS LOADING...");
+
+  const container = document.getElementById("news-container");
+  if(!container) return;
+
+  container.innerHTML = `<div style="color:#888">Loading news...</div>`;
+
+  try{
+    const res = await fetch(`${API}/api/news`);
+    const data = await res.json();
+    const sentiment = data.sentiment || 0;
+
+    document.getElementById("positive-news").textContent =
+    sentiment > 0 ? sentiment : 0;
+
+    document.getElementById("negative-news").textContent =
+    sentiment < 0 ? Math.abs(sentiment) : 0;
+
+    const verdictEl = document.getElementById("news-verdict");
+
+    if(sentiment > 2){
+      verdictEl.textContent = "BULLISH";
+      verdictEl.style.color = "lime";
+    }
+    else if(sentiment < -2){
+      verdictEl.textContent = "BEARISH";
+      verdictEl.style.color = "red";
+    }
+    else{
+      verdictEl.textContent = "MIXED";
+      verdictEl.style.color = "gold";
+    }
+
+    newsLoaded = true;
+
+    console.log("NEWS DATA:", data);
+
+    container.innerHTML = "";
+
+    if(!data || !data.news || data.news.length === 0){
+      container.innerHTML = `<div style="color:gold">No news available</div>`;
+      return;
+    }
+
+    data.news.forEach(n => {
+      const div = document.createElement("div");
+
+      div.style = `
+  padding:14px 10px;
+  border-bottom:1px solid #1e2836;
+  cursor:pointer;
+  transition:all 0.2s ease;
+`;
+
+div.onmouseover = () => {
+  div.style.background = "rgba(255,255,255,0.03)";
+};
+
+div.onmouseout = () => {
+  div.style.background = "transparent";
+};
+
+div.innerHTML = `
+  <div style="
+    font-size:12px;
+    color:#888;
+    margin-bottom:6px;
+  ">
+    ${formatTime(n.time)} • ${n.source}
+  </div>
+
+  <div style="
+    font-size:15px;
+    color:#e8f0f8;
+    line-height:1.5;
+    font-weight:500;
+  ">
+    ${n.title}
+  </div>
+`;
+      div.onclick = () => window.open(n.link, "_blank");
+
+      container.appendChild(div);
+    });
+
+  }catch(err){
+    newsLoaded = false;
+
+    console.error("❌ News load failed:", err);
+
+    container.innerHTML = `
+      <div style="color:red">Failed to load news</div>
+    `;
+  }
+}
 /* ─── RUN SCANNER (FINAL CLEAN VERSION) ─── */
-async function runScan(){
+  async function runScan(){
   const btn    = document.getElementById('scan-btn');
   const loader = document.getElementById('scan-loader');
   const label  = document.getElementById('scan-label');
   const capEl  = document.getElementById('capital-input');
-  const capital = capEl ? parseInt(capEl.value) || 0 : 0;
-  document.getElementById('capital-display').textContent = `₹${capital}`;
+  const capital = capEl ? Math.floor(Number(capEl.value)) || 0 : 0;
+  document.getElementById('capital-display').textContent = `₹${capital.toLocaleString('en-IN')}`;
   if(capital < 10000){
     alert('Enter minimum ₹10,000 capital');
     return;
@@ -789,70 +1041,101 @@ async function runScan(){
   try {
     // ✅ CORRECT API (IMPORTANT FIX)
     const res = await fetch(`${API}/run-scan?capital=${capital}`);
+     if (!res.ok) {
+      throw new Error("API failed");
+     }
     const data = await res.json();
     const trades = data.data || [];
+
     document.getElementById('sig-count').textContent = trades.length;
-    document.getElementById('signal-strength').textContent =
-    trades.length > 0 ? "STRONG" : "WEAK";
-    document.getElementById('app-signal-strength').textContent =
-    trades.length > 0 ? "ACTIVE" : "LOW";
+    
+    const deployed = trades.reduce((sum, t) => sum + (t.position || 0), 0);
+
     document.getElementById('capital-deployed').textContent =
-    trades.length > 0 ? "Partially used" : "0";
-    const tbody = document.getElementById('signals-tbody');
-    if(trades.length === 0){
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="8" style="text-align:center;padding:2rem;color:var(--gold)">
-            No high-quality trades today — wait for better setup
-          </td>
-        </tr>`;
-    } else {
-      tbody.innerHTML = trades.map((t, index) => {
-        let signal = "WAIT";
-        let color = "yellow";
-        if(t.score >= 80){
+      `₹${deployed.toLocaleString('en-IN')}`;
+
+    const avgScore = trades.length
+  ? trades.reduce((sum, t) => sum + t.score, 0) / trades.length
+  : 0;
+
+      let strength = "LOW";
+      if (avgScore > 80) strength = "STRONG";
+      else if (avgScore > 65) strength = "MODERATE";
+
+      document.getElementById('signal-strength').textContent = strength;
+      document.getElementById('app-signal-strength').textContent = strength;
+
+    const container = document.getElementById('signals-body');
+     if(trades.length === 0){
+      container.innerHTML = `
+       <div style="text-align:center;padding:2rem;color:var(--gold)">
+        No high-quality trades today — wait for better setup
+       </div>
+      `;
+     } else {
+  //max score
+        const maxScore = Math.max(...trades.map(x => x.score));
+        container.innerHTML = trades.map((t) => {
+         let signal = "SKIP";
+         let color = "#888";
+
+        if (t.score >= 80) {
           signal = "BUY";
-          color = "lime";
-        }
-        if(index === 0){
+          color = "#00FF00";
+          } 
+        else if (t.score >= 65) {
+           signal = "WATCH";
+            color = "#FFD700";
+          }
+
+        if (t.score === maxScore) {
           signal = "🔥 BEST";
-          color = "cyan";
-        }
-        return `
-        <tr onclick="showTrade('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty})"
-            style="border-bottom:1px solid var(--border);cursor:pointer">
-
-          <td style="padding:0.9rem;color:var(--white);font-weight:bold">${t.stock}</td>
-
-          <td style="padding:0.9rem;color:${color}">${t.score}</td>
-
-          <td style="padding:0.9rem">₹${t.entry}</td>
-
-          <td style="padding:0.9rem;color:var(--red)">₹${t.sl}</td>
-
-          <td style="padding:0.9rem;color:var(--green)">₹${t.target}</td>
-
-          <td style="padding:0.9rem">${t.qty}</td>
-
-          <td style="padding:0.9rem;color:${color};font-weight:bold">${signal}</td>
-
-          <td style="padding:0.9rem;color:var(--cyan)">Execute →</td>
-        </tr>
-        `;
-      }).join('');
-    }
-
+          color = "#00E5C8";
+          }
+         const rr = (t.entry && t.stop_loss && t.entry !== t.stop_loss)
+           ? ((t.target - t.entry) / (t.entry - t.stop_loss)).toFixed(2)
+            : "—";
+      return `
+        <div class="app-row"> 
+          <div class="ar-stock"
+          onclick="showChart('${t.stock}')"
+          onmouseenter="hoverStart(event, '${t.stock}')"
+          onmousemove="hoverMove(event)"
+          onmouseleave="hoverEnd()"
+        >
+         ${t.stock}
+          </div>
+         <div class="ar-score" style="color:${color}">
+          ${t.score}
+         </div>
+         <div class="ar-val">₹${Number(t.entry).toLocaleString('en-IN')}</div>
+         <div class="ar-val" style="color:var(--red)">
+          ₹${Number(t.stop_loss).toLocaleString('en-IN')}
+         </div>
+         <div class="ar-val" style="color:var(--green)">
+          ₹${Number(t.target).toLocaleString('en-IN')}
+         </div>
+         <div class="ar-val">${rr}</div>
+         <div class="ar-val">${t.qty} shares</div>
+         <div class="ar-val">₹${Number(t.position).toLocaleString('en-IN')}</div>
+         <div class="ar-val">
+         <button class="ar-btn" onclick="event.stopPropagation();showTrade('${t.stock}', ${t.entry}, ${t.stop_loss}, ${t.target}, ${t.qty})">
+        ${signal}
+        </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
   } catch(err){
-    console.error(err);
-
-    document.getElementById('signals-tbody').innerHTML = `
-      <tr>
-        <td colspan="8" style="text-align:center;color:var(--red)">
-          Server error — try again
-        </td>
-      </tr>`;
+  console.error(err);
+    alert("❌ Server error — check backend or API");
+  document.getElementById('signals-body').innerHTML = `
+    <div style="text-align:center;color:var(--red);padding:2rem">
+      Server error — try again
+    </div>
+  `;
   }
-
   finally{
     loader.classList.remove('show');
     label.textContent = '▶ Run Scanner';
@@ -862,20 +1145,16 @@ async function runScan(){
 
 /* ─── GENERIC TRADE FUNCTION (BROKER NEUTRAL) ─── */
 function showTrade(stock, entry, sl, target, qty){
-
-  const risk = ((entry - sl) * qty).toFixed(0);
+  const risk = Math.abs((entry - sl) * qty).toFixed(0);
   const upside = (((target - entry) / entry) * 100).toFixed(1);
 
   alert(`
 📊 TRADE PLAN
-
 Stock: ${stock}
-
 Entry: ₹${entry}
 Stop Loss: ₹${sl}
 Target: ₹${target}
 Quantity: ${qty}
-
 Risk: ₹${risk}
 Reward Ratio: 1:2
 Upside: ${upside}%
@@ -894,7 +1173,6 @@ Rules:
 }
 /* ─── MARKET LIVE DATA (FINAL) ─── */
 async function loadMarket(){
-
   try{
     const res = await fetch(`${API}/market`);
     const data = await res.json();
@@ -947,6 +1225,169 @@ async function loadMarket(){
  loadMarket();
  setInterval(loadMarket, 300000);
  showTab('signals');
+ document.getElementById('capital-input').addEventListener('input', (e)=>{
+  const val = Math.floor(Number(e.target.value)) || 0;
+  document.getElementById('capital-display').textContent =
+    val ? `₹${val.toLocaleString('en-IN')}` : '—';
+});
+// SHOW CHART FUNCTION
+function showChart(stock){
+  const container = document.getElementById('chart-container');
+  if(!container) return;
+    if(typeof TradingView === "undefined"){
+    container.innerHTML = "⚠️ Chart library not loaded";
+    return;
+  }
+  document.getElementById('chart-modal').style.display = 'flex';
+  const chartId = 'tv_chart_' + Date.now();
+  container.innerHTML = `<div id="${chartId}"></div>`; 
+  setTimeout(() => {
+    try {
+      new TradingView.widget({
+        width: "100%",
+        height: 600,
+        symbol: `NSE:${stock}`,
+        interval: "D",
+        timezone: "Asia/Kolkata",
+        theme: "dark",
+        style: "1",
+        locale: "en",
+        container_id: chartId
+      });
+    } catch {
+      container.innerHTML = "⚠️ Chart not available";
+    }
+  }, 100);
+}
+
+// ─── CLOSE CHART ───
+function closeChart(){
+  const modal = document.getElementById('chart-modal');
+  if(modal){
+    modal.style.display = 'none';
+  }
+}
+
+// ─── HOVER MINI CHART ───
+let hoverTimer = null;
+let currentStock = null;
+
+function hoverStart(e, stock){
+  hoverTimer = setTimeout(() => {
+    showHoverChart(e, stock);
+  }, 250);
+}
+
+function showHoverChart(e, stock){
+  const container = document.getElementById('hover-chart');
+  if(!container) return;
+
+  if(currentStock === stock){
+    container.style.display = 'block';
+    return;
+  }
+
+  currentStock = stock;
+
+  container.innerHTML = "Loading chart...";
+  container.style.display = 'block';
+
+  const chartId = 'hover_tv_' + Date.now();
+
+  container.innerHTML = `<div id="${chartId}" style="width:100%;height:100%"></div>`;
+
+  setTimeout(() => {
+    try{
+      new TradingView.widget({
+        width: "100%",
+        height: 250,
+        symbol: `NSE:${stock}`,
+        interval: "D",
+        theme: "dark",
+        style: "1",
+        container_id: chartId
+      });
+    } catch (err){
+      console.error(err);
+      container.innerHTML = "Chart error";
+    }
+  }, 100);
+
+  hoverMove(e);
+}
+
+function hoverMove(e){
+  const container = document.getElementById('hover-chart');
+  if(!container) return;
+
+  let x = e.clientX + 20;
+  let y = e.clientY + 20;
+
+  if(x + 350 > window.innerWidth){
+    x = e.clientX - 370;
+  }
+
+  if(y + 250 > window.innerHeight){
+    y = e.clientY - 270;
+  }
+
+  container.style.left = x + 'px';
+  container.style.top  = y + 'px';
+}
+
+function hoverEnd(){
+  clearTimeout(hoverTimer);
+  const container = document.getElementById('hover-chart');
+  if(container){
+    container.style.display = 'none';
+  }
+}
+
 </script>
+<!-- ─── FULL CHART MODAL ─── -->
+<div id="chart-modal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.95);
+  z-index:9999;
+">
+  <button onclick="closeChart()" style="
+    position:fixed;
+    top:20px;
+    right:20px;
+    z-index:10000;
+    background:#ff4560;
+    color:#fff;
+    border:none;
+    padding:10px 16px;
+    cursor:pointer;
+    font-size:14px;
+    border-radius:6px;
+    box-shadow:0 0 10px rgba(0,0,0,0.5);
+  ">
+    ✕ Close
+  </button>
+
+  <!-- ✅ CHART CONTAINER -->
+  <div id="chart-container" style="
+    width:100%;
+    height:100%;
+  "></div>
+
+</div>
+<!-- ─── HOVER MINI CHART ─── -->
+<div id="hover-chart" style="
+  display:none;
+  position:fixed;
+  width:350px;
+  height:250px;
+  background:#0d1117;
+  border:1px solid #1e2836;
+  z-index:9999;
+  pointer-events:none;
+  border-radius:6px;
+  overflow:hidden;
+"></div>
 </body>
 </html>
