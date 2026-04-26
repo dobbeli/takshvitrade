@@ -400,7 +400,6 @@ def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
     # 🔥 Sequential execution (FIXED)
     for stock in stocks:
         print(f"🚀 LOOP RUNNING: {stock}")
-        
 
     r = scan_stock(stock, capital, risk_amount)
 
@@ -411,7 +410,8 @@ def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
         results.append(r)
     else:
         print(f"❌ SKIPPED: {stock}")
-    # Filter (relaxed for testing)
+
+    time.sleep(0.5)   # 🔥 important for yfinance
     results = results
 
     print(f"📊 Total Passed Stocks: {len(results)}")
