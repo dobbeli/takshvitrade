@@ -484,7 +484,7 @@ def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
                 continue
 
     # Filter (relaxed for testing)
-    results = [r for r in results if r["score"] >= 20]
+    results = results
 
     print(f"📊 Total Passed Stocks: {len(results)}")
 
