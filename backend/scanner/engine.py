@@ -325,6 +325,7 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         latest = df.iloc[-1]
 
         print(f"🔥 FINAL RETURN HIT: {symbol}")
+        print(f"✅ FORCING RETURN: {symbol}")
 
         return {
             "stock": symbol.replace(".NS", ""),
@@ -396,17 +397,17 @@ def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
     for stock in stocks:
         print(f"🚀 LOOP RUNNING: {stock}")
 
-    r = scan_stock(stock, capital, risk_amount)
+        r = scan_stock(stock, capital, risk_amount)
 
-    print(f"🔥 RESULT: {r}")
+        print(f"🔥 RESULT: {r}")
 
-    if r is not None:
-        print(f"✅ ADDED: {stock}")
-        results.append(r)
-    else:
-        print(f"❌ SKIPPED: {stock}")
+        if r is not None:
+            print(f"✅ ADDED: {stock}")
+            results.append(r)
+        else:
+            print(f"❌ SKIPPED: {stock}")
 
-    time.sleep(0.5)   # 🔥 important for yfinance
+        time.sleep(0.5)   # prevent Yahoo blocking # 🔥 important for yfinance
     results = results
 
     print(f"📊 Total Passed Stocks: {len(results)}")
