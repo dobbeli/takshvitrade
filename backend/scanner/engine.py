@@ -403,7 +403,7 @@ def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
         }
 
         for future in as_completed(futures):
-    stock = futures[future]
+            stock = futures[future]
 
     try:
         r = future.result(timeout=10)
@@ -418,7 +418,7 @@ def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
 
     except Exception as e:
         print(f"⛔ ERROR in {stock}: {e}")
-        
+
     # Filter (relaxed for testing)
     results = results
 
