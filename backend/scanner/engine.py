@@ -416,8 +416,10 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         entry = float(prev["High"]) * 1.001 
         if entry < float(latest["Close"]) * 0.98:
             print(f"⚠️ Extended move but allowed: {symbol}")
+
         atr = float(latest["ATR"])
-        stop_loss = entry - (1.5 * atr)
+        stop_loss = entry - 1.5 * atr
+
 
         risk = entry - stop_loss
         if risk <= 0:
@@ -437,20 +439,10 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         # Final qty
         qty = int(min(qty_risk, qty_cap))
 
+        max_qty = int((capital * 0.25) / entry)
+        qty = min(qty, max_qty)
 
         if qty <= 0:
-            return None
-        
-        if qty * entry > capital * 0.50:
-            print(f"""
-            DEBUG {symbol}:
-            Entry: {entry}
-            Close: {latest['Close']}
-            SL: {stop_loss}
-            Risk: {risk}
-            Qty: {qty}
-            Position: {qty * entry}
-            """)
             return None
         
         position = qty * entry
