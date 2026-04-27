@@ -28,46 +28,50 @@ def get_data_from_nse(symbol: str):
     try:
         symbol = symbol.replace(".NS", "")
 
-        url = f"https://www.nseindia.com/api/chart-databyindex?index={symbol}"
+        # 🔥 Using Yahoo direct API (no yfinance → works on Render)
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}.NS"
 
         headers = {
-            "User-Agent": "Mozilla/5.0",
-            "Accept": "application/json",
-            "Referer": "https://www.nseindia.com/"
+            "User-Agent": "Mozilla/5.0"
         }
 
-        session = requests.Session()
-        session.get("https://www.nseindia.com", headers=headers)
-
-        response = session.get(url, headers=headers)
+        response = requests.get(url, headers=headers)
 
         if response.status_code != 200:
-            print(f"❌ NSE failed: {symbol}")
+            print(f"❌ Fallback failed: {symbol}")
             return None
 
         data = response.json()
 
-        if "grapthData" not in data:
-            print(f"❌ NSE empty: {symbol}")
+        result = data.get("chart", {}).get("result")
+
+        if not result:
+            print(f"❌ Empty data: {symbol}")
             return None
 
-        df = pd.DataFrame(data["grapthData"], columns=["timestamp", "price"])
+        result = result[0]
 
-        df["Close"] = df["price"]
-        df["Open"] = df["price"]
-        df["High"] = df["price"]
-        df["Low"] = df["price"]
-        df["Volume"] = 100000  # dummy volume
+        timestamps = result["timestamp"]
+        indicators = result["indicators"]["quote"][0]
 
-        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
-        df.set_index("timestamp", inplace=True)
+        df = pd.DataFrame({
+            "Open": indicators["open"],
+            "High": indicators["high"],
+            "Low": indicators["low"],
+            "Close": indicators["close"],
+            "Volume": indicators["volume"],
+        })
+
+        df["Date"] = pd.to_datetime(timestamps, unit="s")
+        df.set_index("Date", inplace=True)
 
         return df.tail(200)
 
     except Exception as e:
-        print(f"❌ NSE error: {symbol} - {e}")
+        print(f"❌ Fallback error: {symbol} - {e}")
         return None
     
+        
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 #GLOBAL FUNCTION
 def flatten_columns(df):
