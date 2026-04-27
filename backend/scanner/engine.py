@@ -375,30 +375,42 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         vsma = float(latest["VOL_SMA"])
         price = float(latest["Close"])
 
-        # ✅ TREND
-        if not (ema20 > ema50 > ema200):
+
+        # ───────────────────────────────
+# ✅ CORE CONDITIONS (MANDATORY)
+# ───────────────────────────────
+
+        trend_ok = ema20 > ema50 > ema200
+        ema_rising = latest["EMA20"] > prev["EMA20"]
+
+        if not (trend_ok and ema_rising):
             return None
 
-        # ✅ EMA20 rising
-        if latest["EMA20"] <= prev["EMA20"]:
-            return None
+# ───────────────────────────────
+# 🔥 FLEXIBLE SCORING SYSTEM
+# ───────────────────────────────
 
-        # ✅ PULLBACK near EMA20 (±2%)
-        if not (ema20 * 0.96 <= price <= ema20 * 1.04):
-            return None
+        score = 0
 
-        # ✅ RSI (tight)
-        if not (50 <= rsi <= 70):
-            return None
+# RSI
+        if 50 <= rsi <= 70:
+            score += 1
 
-        # ✅ Bullish candle
-        if latest["Close"] <= latest["Open"]:
-            return None
+# Pullback zone (wider)
+        if ema20 * 0.95 <= price <= ema20 * 1.05:
+            score += 1
 
-        # ✅ Volume (strict)
-        if not (vsma > 0 and vol > 1.0 * vsma):
-            return None
+# Bullish candle
+        if latest["Close"] > latest["Open"]:
+            score += 1
 
+# Volume
+        if vsma > 0 and vol > vsma:
+            score += 1
+
+# FINAL FILTER
+        if score < 2:
+            return None
         # ───────────────────────────────
         # 🚀 TRADE CALCULATION
         # ───────────────────────────────
@@ -434,7 +446,7 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             "qty": qty,
             "position": round(position, 2),
             "rr": 2.0,
-            "score": 100,
+            "score": score * 25,
             "upside_pct": upside_pct,
             "reasons": [
                 "Strong Uptrend",
