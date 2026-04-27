@@ -220,7 +220,7 @@ def score_stock(df: pd.DataFrame):
         reasons.append("Bullish candle")
 
     # RSI
-    if 50 < rsi < 70:
+    if 45 <= rsi <= 75:
         score += 15
         reasons.append("Healthy RSI")
 
@@ -397,7 +397,7 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             score += 1
 
 # Pullback zone (wider)
-        if ema20 * 0.95 <= price <= ema20 * 1.05:
+        if ema20 * 0.93 <= price <= ema20 * 1.07:
             score += 1
 
 # Bullish candle
@@ -405,11 +405,12 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             score += 1
 
 # Volume
-        if vsma > 0 and vol > vsma:
+        if vsma > 0 and vol > 0.8 * vsma:
             score += 1
 
 # FINAL FILTER
-        if score < 2:
+        print(f"📊 SCORE: {symbol} = {score}")
+        if score < 1:
             return None
         # ───────────────────────────────
         # 🚀 TRADE CALCULATION
