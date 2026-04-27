@@ -169,8 +169,10 @@ def add_indicators(df: pd.DataFrame) -> Optional[pd.DataFrame]:
         df["ATR"]      = ta.volatility.average_true_range(high, low, close, window=14).values
         df["VOL_SMA"]  = volume.rolling(10).mean().values
         df["HIGH_52W"] = df["High"].rolling(252).max().values
+        if df["EMA200"].isnull().all():
+            df["EMA200"] = df["EMA50"]
         df = df.fillna(method="bfill").fillna(method="ffill")
-        df = df.dropna(subset=["EMA20","EMA50","EMA200","RSI","ATR"])
+        df = df.dropna(subset=["EMA20","EMA50","RSI","ATR"])
         if len(df) < 5:
             return None
         return df
