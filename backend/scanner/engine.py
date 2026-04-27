@@ -364,109 +364,91 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         # 🎯 REAL STRATEGY STARTS HERE
         # ───────────────────────────────
 
-        score, reasons = score_stock(df)
-
         latest = df.iloc[-1]
-        prev   = df.iloc[-2]
+        prev = df.iloc[-2]
 
-        ema20  = float(latest["EMA20"])
-        ema50  = float(latest["EMA50"])
+        ema20 = float(latest["EMA20"])
+        ema50 = float(latest["EMA50"])
         ema200 = float(latest["EMA200"])
-        rsi    = float(latest["RSI"])
-        vol    = float(latest["Volume"])
-        vsma   = float(latest["VOL_SMA"])
+        rsi = float(latest["RSI"])
+        vol = float(latest["Volume"])
+        vsma = float(latest["VOL_SMA"])
+        price = float(latest["Close"])
 
-        # ✅ A+ STRATEGY FILTERS
-
-        # Trend
+        # ✅ TREND
         if not (ema20 > ema50 > ema200):
             return None
 
-        # EMA rising
-        # if not is_ema20_rising(df):
-        #     return None
-
-        # RSI
-        if not (50 <= rsi <= 70):
+        # ✅ EMA20 rising
+        if latest["EMA20"] <= prev["EMA20"]:
             return None
 
-        # Volume
-        if not (vsma > 0 and vol > vsma):
+        # ✅ PULLBACK near EMA20 (±2%)
+        if not (ema20 * 0.98 <= price <= ema20 * 1.02):
             return None
 
-        # Candle confirmation
-        if get_candle_type(latest) == "Bearish":
+        # ✅ RSI (tight)
+        if not (55 <= rsi <= 65):
             return None
 
-        # Pullback to EMA20
-        # if not is_pullback_to_ema20(df):
-        #     return None
+        # ✅ Bullish candle
+        if latest["Close"] <= latest["Open"]:
+            return None
+
+        # ✅ Volume (strict)
+        if not (vsma > 0 and vol > 1.2 * vsma):
+            return None
 
         # ───────────────────────────────
         # 🚀 TRADE CALCULATION
         # ───────────────────────────────
 
-        trade = calculate_trade_levels(df, capital, risk_amount)
+        entry = float(prev["High"])
+        stop_loss = float(prev["Low"])
 
-        if trade is None:
+        risk = entry - stop_loss
+        if risk <= 0:
             return None
 
-        upside_pct = round(((trade["target"] - trade["entry"]) / trade["entry"]) * 100, 2)
+        target = entry + (2 * risk)
+
+        # Position sizing
+        qty = int(risk_amount / risk)
+        if qty <= 0:
+            return None
+
+        position = qty * entry
+
+        upside_pct = round(((target - entry) / entry) * 100, 2)
+
+        # ───────────────────────────────
+        # 🚀 FINAL RETURN
+        # ───────────────────────────────
 
         return {
             "stock": symbol.replace(".NS", ""),
-            "close": round(float(latest["Close"]), 2),
-            "entry": trade["entry"],
-            "stop_loss": trade["stop"],
-            "target": trade["target"],
-            "qty": trade["qty"],
-            "position": trade["position"],
-            "rr": trade["rr"],
-            "score": score,
+            "close": round(price, 2),
+            "entry": round(entry, 2),
+            "stop_loss": round(stop_loss, 2),
+            "target": round(target, 2),
+            "qty": qty,
+            "position": round(position, 2),
+            "rr": 2.0,
+            "score": 100,
             "upside_pct": upside_pct,
-            "reasons": reasons
+            "reasons": [
+                "Strong Uptrend",
+                "Near EMA20",
+                "Bullish candle",
+                "Healthy RSI",
+                "Volume support",
+                "EMA rising"
+            ]
         }
 
     except Exception as e:
         print(f"⚠️ Error scanning {symbol}: {e}")
         return None
-
-# ── Market health check ───────────────────────────────────────
-def check_market_status() -> dict:
-    try:
-        df = yf.download("^NSEI", period="3mo", interval="1d",
-                         progress=False, auto_adjust=False,threads=False)
-        if df is None or df.empty:
-            return {"bullish": True, "error": "Could not fetch NIFTY"}
-
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-
-            df = df.loc[:, ~df.columns.duplicated()]
-        print("NIFTY DF COLUMNS:", df.columns.tolist())
-
-        close  = pd.Series(df["Close"].values.flatten(), index=df.index, dtype=float)
-        ema50  = float(ta.trend.ema_indicator(close, window=50).iloc[-1])
-        ema200 = float(ta.trend.ema_indicator(close, window=200).iloc[-1])
-        rsi    = float(ta.momentum.rsi(close, window=14).iloc[-1])
-        price  = float(close.iloc[-1])
-
-        bullish = price > ema50 and price > ema200 and rsi > 40
-
-        return {
-            "price":   round(price, 2),
-            "ema50":   round(ema50, 2),
-            "ema200":  round(ema200, 2),
-            "rsi":     round(rsi, 1),
-            "bullish": bullish,
-            "verdict": "BULLISH" if bullish else "BEARISH",
-            "above_ema50":  price > ema50,
-            "above_ema200": price > ema200,
-            "checked_at":   datetime.now().isoformat(),
-        }
-    except Exception as e:
-        return {"bullish": True, "error": str(e)}
-
 
 # ── Full scan runner ──────────────────────────────────────────
 def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
