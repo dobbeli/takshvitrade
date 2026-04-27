@@ -383,15 +383,15 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             return None
 
         # EMA rising
-        if not is_ema20_rising(df):
-            return None
+        # if not is_ema20_rising(df):
+        #     return None
 
         # RSI
-        if not (55 <= rsi <= 65):
+        if not (50 <= rsi <= 70):
             return None
 
         # Volume
-        if not (vsma > 0 and vol > 1.2 * vsma):
+        if not (vsma > 0 and vol > vsma):
             return None
 
         # Candle confirmation
@@ -399,8 +399,8 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             return None
 
         # Pullback to EMA20
-        if not is_pullback_to_ema20(df):
-            return None
+        # if not is_pullback_to_ema20(df):
+        #     return None
 
         # ───────────────────────────────
         # 🚀 TRADE CALCULATION
