@@ -425,8 +425,15 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
 
         target = entry + (2 * risk)
 
-        # Position sizing
-        qty = int(risk_amount / risk)
+        qty_risk = risk_amount / risk
+
+        # Capital-based qty (max 20% allocation)
+        qty_cap = (capital * 0.20) / entry
+
+        # Final qty
+        qty = int(min(qty_risk, qty_cap))
+
+
         if qty <= 0:
             return None
 
