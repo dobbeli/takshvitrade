@@ -414,17 +414,17 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         # ───────────────────────────────
 
         entry = float(prev["High"]) * 1.001 
-        # Allow slightly extended breakout (real market behavior)
-        if entry < float(latest["Close"]) * 0.995:
-            return None
-        stop_loss = float(prev["Low"])
+        if entry < float(latest["Close"]) * 0.98:
+            print(f"⚠️ Extended move but allowed: {symbol}")
+        atr = float(latest["ATR"])
+        stop_loss = entry - (1.5 * atr)
 
         risk = entry - stop_loss
         if risk <= 0:
             return None
 
         # ❌ Avoid too tight SL (noise trades)
-        if risk < entry * 0.003:   # 0.3%
+        if risk < entry * 0.002:   # 0.2%
             return None
 
         target = entry + (2 * risk)
@@ -441,7 +441,16 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         if qty <= 0:
             return None
         
-        if qty * entry > capital * 0.35:
+        if qty * entry > capital * 0.50:
+            print(f"""
+            DEBUG {symbol}:
+            Entry: {entry}
+            Close: {latest['Close']}
+            SL: {stop_loss}
+            Risk: {risk}
+            Qty: {qty}
+            Position: {qty * entry}
+            """)
             return None
         
         position = qty * entry
