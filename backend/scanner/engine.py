@@ -384,11 +384,11 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             return None
 
         # ✅ PULLBACK near EMA20 (±2%)
-        if not (ema20 * 0.98 <= price <= ema20 * 1.02):
+        if not (ema20 * 0.96 <= price <= ema20 * 1.04):
             return None
 
         # ✅ RSI (tight)
-        if not (55 <= rsi <= 65):
+        if not (50 <= rsi <= 70):
             return None
 
         # ✅ Bullish candle
@@ -396,7 +396,7 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             return None
 
         # ✅ Volume (strict)
-        if not (vsma > 0 and vol > 1.2 * vsma):
+        if not (vsma > 0 and vol > 1.0 * vsma):
             return None
 
         # ───────────────────────────────
