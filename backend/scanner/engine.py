@@ -278,6 +278,8 @@ def calculate_trade_levels(df: pd.DataFrame, capital=CAPITAL, risk_amount=RISK_A
 
     # Final qty
     qty = int(min(qty_risk, qty_cap))
+    max_qty = int((capital * 0.25) / entry)
+    qty = min(qty, max_qty)
     if qty <= 0:
         return None
 
@@ -411,7 +413,7 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         # 🚀 TRADE CALCULATION
         # ───────────────────────────────
 
-        entry = max(float(prev["High"]), float(latest["Close"]))
+        entry = float(prev["High"])
         if entry <= float(latest["Close"]):
             return None
         stop_loss = float(prev["Low"])
@@ -421,7 +423,7 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             return None
 
         # ❌ Avoid too tight SL (noise trades)
-        if risk < entry * 0.005:   # 0.5%
+        if risk < entry * 0.003:   # 0.5%
             return None
 
         target = entry + (2 * risk)
@@ -458,7 +460,7 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             "qty": qty,
             "position": round(position, 2),
             "rr": 2.0,
-            "score": 100,
+            "score": score * 25,
             "upside_pct": upside_pct,
             "reasons": [
                 "Strong Uptrend",
