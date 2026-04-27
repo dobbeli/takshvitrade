@@ -9,7 +9,7 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import requests
-from concurrent.futures import ThreadPoolExecutor, as_completed 
+
 
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 #GLOBAL FUNCTION
@@ -71,18 +71,9 @@ def get_stock_data(symbol: str) -> Optional[pd.DataFrame]:
             time.sleep(0.3)
 
 
-    if df is None or df.empty:
-        print(f"⚠️ Yahoo failed for {symbol} — USING DUMMY DATA")
-
-    dates = pd.date_range(end=pd.Timestamp.today(), periods=200)
-
-    df = pd.DataFrame({
-        "Open": np.random.uniform(100, 500, 200),
-        "High": np.random.uniform(100, 500, 200),
-        "Low": np.random.uniform(100, 500, 200),
-        "Close": np.random.uniform(100, 500, 200),
-        "Volume": np.random.uniform(100000, 500000, 200)
-    }, index=dates)
+        if df is None or df.empty:
+            print(f"❌ Data fetch failed: {symbol}")
+            return None
 
     try:
         # ✅ Flatten columns (IMPORTANT FIX)
@@ -192,7 +183,7 @@ def score_stock(df: pd.DataFrame):
         reasons.append("Healthy RSI")
 
     # VOLUME
-    if vsma > 0 and vol > vsma:
+    if vsma > 0 and vol > 1.2 * vsma:
         score += 10
         reasons.append("Volume support")
 
@@ -327,22 +318,71 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         else:
             print(f"✅ Indicators OK: {symbol}, rows: {len(df)}")
 
-        # 👉 FORCE RETURN TEST (IMPORTANT)
-        latest = df.iloc[-1]
+        # ───────────────────────────────
+        # 🎯 REAL STRATEGY STARTS HERE
+        # ───────────────────────────────
 
-        print(f"🔥 FINAL RETURN HIT: {symbol}")
-        print(f"✅ FORCING RETURN: {symbol}")
+        score, reasons = score_stock(df)
+
+        latest = df.iloc[-1]
+        prev   = df.iloc[-2]
+
+        ema20  = float(latest["EMA20"])
+        ema50  = float(latest["EMA50"])
+        ema200 = float(latest["EMA200"])
+        rsi    = float(latest["RSI"])
+        vol    = float(latest["Volume"])
+        vsma   = float(latest["VOL_SMA"])
+
+        # ✅ A+ STRATEGY FILTERS
+
+        # Trend
+        if not (ema20 > ema50 > ema200):
+            return None
+
+        # EMA rising
+        if not is_ema20_rising(df):
+            return None
+
+        # RSI
+        if not (55 <= rsi <= 65):
+            return None
+
+        # Volume
+        if not (vsma > 0 and vol > 1.2 * vsma):
+            return None
+
+        # Candle confirmation
+        if get_candle_type(latest) == "Bearish":
+            return None
+
+        # Pullback to EMA20
+        if not is_pullback_to_ema20(df):
+            return None
+
+        # ───────────────────────────────
+        # 🚀 TRADE CALCULATION
+        # ───────────────────────────────
+
+        trade = calculate_trade_levels(df, capital, risk_amount)
+
+        if trade is None:
+            return None
+
+        upside_pct = round(((trade["target"] - trade["entry"]) / trade["entry"]) * 100, 2)
 
         return {
             "stock": symbol.replace(".NS", ""),
-            "close": float(latest["Close"]),
-            "entry": float(latest["Close"]),
-            "stop_loss": float(latest["Close"]) * 0.97,
-            "target": float(latest["Close"]) * 1.05,
-            "qty": 1,
-            "position": float(latest["Close"]),
-            "rr": 1.2,
-            "score": 50
+            "close": round(float(latest["Close"]), 2),
+            "entry": trade["entry"],
+            "stop_loss": trade["stop"],
+            "target": trade["target"],
+            "qty": trade["qty"],
+            "position": trade["position"],
+            "rr": trade["rr"],
+            "score": score,
+            "upside_pct": upside_pct,
+            "reasons": reasons
         }
 
     except Exception as e:
