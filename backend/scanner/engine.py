@@ -90,7 +90,7 @@ from typing import Optional
 # ── Config ──────────────────────────────────────────────────
 CAPITAL      = 100000   # ₹ default, overridden per user
 RISK_AMOUNT  = 2000     # ₹ max risk per trade
-MAX_POSITIONS = 5
+MAX_POSITIONS = 10
 
 NIFTY50_STOCKS = [
     "RELIANCE","TCS","INFY","HDFCBANK","ICICIBANK",
@@ -482,36 +482,23 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
 def run_full_scan(capital=CAPITAL, risk_amount=RISK_AMOUNT) -> list:
 
     results = []
-    stocks = [s + ".NS" for s in NIFTY50_STOCKS][:20]
+
+    # ✅ FULL 50 STOCKS
+    stocks = [s + ".NS" for s in NIFTY50_STOCKS]
+
     print(f"🔥 TOTAL STOCKS: {len(stocks)}")
 
-    print(f"🚀 Running parallel scan for {len(stocks)} stocks...")
-
-    start = time.time()
-    MAX_SCAN_TIME = 25   # ⏱️ total scan timeout
-
-    # 🔥 Parallel execution
-    # 🔥 Sequential execution (FIXED)
     for stock in stocks:
         print(f"🚀 LOOP RUNNING: {stock}")
 
         r = scan_stock(stock, capital, risk_amount)
 
-        print(f"🔥 RESULT: {r}")
-
         if r is not None:
-            print(f"✅ ADDED: {stock}")
             results.append(r)
-        else:
-            print(f"❌ SKIPPED: {stock}")
 
-        time.sleep(1)   # prevent Yahoo blocking # 🔥 important for yfinance
-    results = results
+        time.sleep(0.2)   # 🔥 reduced delay
 
     print(f"📊 Total Passed Stocks: {len(results)}")
-
-    if not results:
-        print("⚠️ No stocks passed, returning empty list")
 
     results.sort(key=lambda x: x["score"], reverse=True)
 
