@@ -70,8 +70,8 @@ def get_data_from_nse(symbol: str):
     except Exception as e:
         print(f"❌ Fallback error: {symbol} - {e}")
         return None
-    
-        
+
+
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 #GLOBAL FUNCTION
 def flatten_columns(df):
@@ -150,7 +150,7 @@ def get_stock_data(symbol: str) -> Optional[pd.DataFrame]:
 
 # ── BLOCK 5: Technical indicators ────────────────────────────
 def add_indicators(df: pd.DataFrame) -> Optional[pd.DataFrame]:
-    if df is None or df.empty or len(df) < 200:
+    if df is None or df.empty or len(df) < 50:
         return None
     try:
         close  = pd.Series(df["Close"].values.flatten(),  index=df.index, dtype=float).ffill().bfill()
