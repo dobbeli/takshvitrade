@@ -392,23 +392,18 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
 
         score = 0
 
-# RSI
         if 50 <= rsi <= 70:
             score += 1
 
-# Pullback zone (wider)
         if ema20 * 0.93 <= price <= ema20 * 1.07:
             score += 1
 
-# Bullish candle
         if latest["Close"] > latest["Open"]:
             score += 1
 
-# Volume
         if vsma > 0 and vol > 0.8 * vsma:
             score += 1
 
-# FINAL FILTER
         print(f"📊 SCORE: {symbol} = {score}")
         if score < 1:
             return None
@@ -416,11 +411,17 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
         # 🚀 TRADE CALCULATION
         # ───────────────────────────────
 
-        entry = float(prev["High"])
+        entry = max(float(prev["High"]), float(latest["Close"]))
+        if entry <= float(latest["Close"]):
+            return None
         stop_loss = float(prev["Low"])
 
         risk = entry - stop_loss
         if risk <= 0:
+            return None
+
+        # ❌ Avoid too tight SL (noise trades)
+        if risk < entry * 0.005:   # 0.5%
             return None
 
         target = entry + (2 * risk)
@@ -436,7 +437,10 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
 
         if qty <= 0:
             return None
-
+        
+        if qty * entry > capital * 0.25:
+            return None
+        
         position = qty * entry
 
         upside_pct = round(((target - entry) / entry) * 100, 2)
@@ -454,7 +458,7 @@ def scan_stock(symbol: str, capital=CAPITAL, risk_amount=RISK_AMOUNT) -> Optiona
             "qty": qty,
             "position": round(position, 2),
             "rr": 2.0,
-            "score": score * 25,
+            "score": 100,
             "upside_pct": upside_pct,
             "reasons": [
                 "Strong Uptrend",
