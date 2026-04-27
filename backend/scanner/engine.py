@@ -10,7 +10,64 @@ import pandas as pd
 import numpy as np
 import requests
 
+def get_data_from_yahoo(symbol: str):
+    try:
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(period="6mo", interval="1d")
 
+        if df is None or df.empty:
+            return None
+
+        return df
+
+    except Exception as e:
+        print(f"❌ Yahoo error: {symbol} - {e}")
+        return None
+    
+def get_data_from_nse(symbol: str):
+    try:
+        symbol = symbol.replace(".NS", "")
+
+        url = f"https://www.nseindia.com/api/chart-databyindex?index={symbol}"
+
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
+            "Referer": "https://www.nseindia.com/"
+        }
+
+        session = requests.Session()
+        session.get("https://www.nseindia.com", headers=headers)
+
+        response = session.get(url, headers=headers)
+
+        if response.status_code != 200:
+            print(f"❌ NSE failed: {symbol}")
+            return None
+
+        data = response.json()
+
+        if "grapthData" not in data:
+            print(f"❌ NSE empty: {symbol}")
+            return None
+
+        df = pd.DataFrame(data["grapthData"], columns=["timestamp", "price"])
+
+        df["Close"] = df["price"]
+        df["Open"] = df["price"]
+        df["High"] = df["price"]
+        df["Low"] = df["price"]
+        df["Volume"] = 100000  # dummy volume
+
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+        df.set_index("timestamp", inplace=True)
+
+        return df.tail(200)
+
+    except Exception as e:
+        print(f"❌ NSE error: {symbol} - {e}")
+        return None
+    
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 #GLOBAL FUNCTION
 def flatten_columns(df):
@@ -46,67 +103,46 @@ NIFTY50_STOCKS = [
 
 # ── BLOCK 4: Download price history ─────────────────────────
 def get_stock_data(symbol: str) -> Optional[pd.DataFrame]:
-    df = None
-    
-    # 🔁 Retry logic (3 attempts)
-    for i in range(3):
-        try:
-            print(f"Trying fetch: {symbol}")
+    # 🔹 TRY YAHOO FIRST
+    df = get_data_from_yahoo(symbol)
 
-            ticker = yf.Ticker(symbol)
+    if df is not None and not df.empty:
+        print(f"✅ Yahoo OK: {symbol}")
+    else:
+        print(f"⚠️ Yahoo failed → trying NSE: {symbol}")
+        df = get_data_from_nse(symbol)
 
-            df = ticker.history(
-                period="6mo",
-                interval="1d"
-            )
-            if df is not None and not df.empty:
-                break
-            else:
-                print(f"⚠️ Empty response, retrying... ({i+1})")
-                time.sleep(0.3)
-
-        except Exception as e:
-            print(f"⚠️ Fetch error for {symbol}: {e}")
-            df = None
-            time.sleep(0.3)
-
-
-        if df is None or df.empty:
-            print(f"❌ Data fetch failed: {symbol}")
-            return None
+    if df is None or df.empty:
+        print(f"❌ All data sources failed: {symbol}")
+        return None
 
     try:
-        # ✅ Flatten columns (IMPORTANT FIX)
+        # Flatten columns
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
 
-        # ✅ Remove duplicate columns
         df = df.loc[:, ~df.columns.duplicated()]
 
-        # ✅ Required columns check
         required = ["Open", "High", "Low", "Close", "Volume"]
+
         if not all(col in df.columns for col in required):
-            print(f"❌ Missing required columns for {symbol}")
+            print(f"❌ Missing columns: {symbol}")
             return None
 
-        # ✅ Keep only required columns
         df = df[required].copy()
 
-        # ✅ Convert to numeric
         for col in required:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-        # ✅ Drop NaN rows
         df = df.dropna()
 
         print(f"✅ Data OK: {symbol} | Rows: {len(df)}")
-        df = df.tail(200)
-        return df
+
+        return df.tail(200)
 
     except Exception as e:
-        print(f"❌ Processing error for {symbol}: {e}")
-        return None
-    
+        print(f"❌ Processing error: {symbol} - {e}")
+        return None    
 
 # ── BLOCK 5: Technical indicators ────────────────────────────
 def add_indicators(df: pd.DataFrame) -> Optional[pd.DataFrame]:
