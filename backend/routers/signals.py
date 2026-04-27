@@ -6,7 +6,7 @@ from typing import Optional, Any
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from scanner.engine  import run_full_scan, check_market_status, NIFTY50_STOCKS
+from scanner.engine import run_full_scan, NIFTY50_STOCKS
 from scanner.capital import calculate_capacity, size_trades_to_capital, get_capital_summary
 from scanner.alerts  import send_whatsapp, format_signal_message, send_test_message
 
@@ -18,7 +18,7 @@ def get_capacity(capital: float = Query(50000)):
 
 @router.get("/quick")
 def quick_scan(capital: float = Query(50000)):
-    market     = check_market_status()
+    market     = "OPEN"
     raw_trades = run_full_scan(capital=capital, risk_amount=capital * 0.01)
     sized      = size_trades_to_capital(raw_trades, capital)
     summary    = get_capital_summary(sized, capital)
@@ -32,7 +32,7 @@ def scan_signals(
 ):
     if capital < 10000:
         raise HTTPException(400, "Minimum capital is Rs 10,000")
-    market     = check_market_status()
+    market     = "OPEN"
     raw_trades = run_full_scan(capital=capital, risk_amount=capital * 0.01)
     sized      = size_trades_to_capital(raw_trades, capital, None)
     summary    = get_capital_summary(sized, capital)
