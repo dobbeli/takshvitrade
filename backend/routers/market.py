@@ -1,23 +1,25 @@
 """Market Router — /api/market"""
 from fastapi import APIRouter
-from scanner.engine import check_market_status
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
 
-router   = APIRouter()
-executor = ThreadPoolExecutor(max_workers=2)
+router = APIRouter()
 
+
+# 🔹 BASIC MARKET STATUS (TEMP STABLE VERSION)
 @router.get("/status")
-async def market_status():
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, check_market_status)
-
-@router.get("/nifty")
-async def nifty_price():
-    status = await market_status()
+def market_status():
     return {
-        "price":   status.get("price"),
-        "rsi":     status.get("rsi"),
-        "verdict": status.get("verdict"),
-        "bullish": status.get("bullish"),
+        "market": "OPEN",
+        "message": "Market assumed open (no live check yet)"
+    }
+
+
+# 🔹 NIFTY PLACEHOLDER (WILL UPGRADE LATER)
+@router.get("/nifty")
+def nifty_price():
+    return {
+        "price": None,
+        "rsi": None,
+        "verdict": "N/A",
+        "bullish": None,
+        "note": "Nifty data not connected yet"
     }
