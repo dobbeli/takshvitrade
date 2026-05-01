@@ -10,6 +10,9 @@ logging.basicConfig(level=logging.INFO)
 # ===============================
 
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+import io
+import csv
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
@@ -17,12 +20,12 @@ from contextlib import asynccontextmanager
 from routers import signals
 from routers import market
 from routers import news
-# from routers import auth   # 🔥 keep this commented for now
 
 # Engine
-from scanner.engine import run_full_scan
+from scanner.engine import run_full_scan, get_market_trend  
 
 print("✅ All imports successful")
+
 # ===============================
 # APP SETUP
 # ===============================
@@ -39,7 +42,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS (ONLY ONCE)
+# ===============================
+# CORS
+# ===============================
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -52,7 +58,6 @@ app.add_middleware(
 # ROUTERS
 # ===============================
 
-#app.include_router(auth.router, prefix="/api/auth")
 app.include_router(signals.router, prefix="/api/signals")
 app.include_router(market.router, prefix="/api/market")
 app.include_router(news.router, prefix="/api/news")
@@ -70,42 +75,6 @@ def health():
     return {"status": "healthy"}
 
 # ===============================
-# 📊 MARKET API
-# ===============================
-
-@app.get("/market")
-def market_status():
-    import requests
-
-    try:
-        url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI"
-        headers = {"User-Agent": "Mozilla/5.0"}
-
-        res = requests.get(url, headers=headers, timeout=10)
-        data = res.json()
-
-        result = data["chart"]["result"][0]
-        close_prices = result["indicators"]["quote"][0]["close"]
-
-        if not close_prices or len(close_prices) < 2:
-            return {"price": 0, "trend": "DOWN", "data": []}
-
-        price = round(close_prices[-1], 2)
-        prev = close_prices[-2]
-
-        trend = "UP" if price > prev else "DOWN"
-
-        return {
-            "price": price,
-            "trend": trend,
-            "data": []  # clean response
-        }
-
-    except Exception as e:
-        print(f"❌ Market error: {e}")
-        return {"price": 0, "trend": "DOWN", "data": []}
-
-# ===============================
 # 📊 CHART API
 # ===============================
 
@@ -117,7 +86,7 @@ def get_chart(symbol: str = "INFY.NS"):
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=3mo&interval=1d"
         headers = {"User-Agent": "Mozilla/5.0"}
 
-        res = requests.get(url, headers=headers)
+        res = requests.get(url, headers=headers, timeout=10)
         data = res.json()
 
         result = data["chart"]["result"][0]
@@ -138,26 +107,82 @@ def get_chart(symbol: str = "INFY.NS"):
         return {"data": chart_data}
 
     except Exception as e:
-        print(f"❌ Chart error: {e}")
+        logging.error(f"Chart error: {e}")
         return {"data": []}
 
 # ===============================
-# 🔥 SCANNER API (ENGINE BASED)
+# 🔥 SCANNER API
 # ===============================
 
 @app.get("/run-scan")
 def run_scan(capital: int = 50000):
     try:
+        # ✅ MARKET DATA
+        market_trend, nifty_value, change_pct = get_market_trend()
+
+        # ✅ SCAN
         results = run_full_scan(capital=capital)
 
         return {
-            "count": len(results),
-            "data": results
+            "count":        len(results),
+            "data":         results,
+            "market_trend": market_trend,
+            "nifty":        nifty_value,
+            "change_pct":   change_pct,
         }
 
     except Exception as e:
-        print(f"❌ Scan error: {e}")
+        logging.error(f"Scan error: {e}")
         return {
-            "count": 0,
-            "data": []
+            "count":        0,
+            "data":         [],
+            "market_trend": "SIDEWAYS",
+            "nifty":        None,
+            "change_pct":   None,
         }
+
+# ===============================
+# 📥 CSV DOWNLOAD API
+# ===============================
+
+@app.get("/download-csv")
+def download_csv(capital: int = 50000):
+    try:
+        results = run_full_scan(capital=capital)
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+
+        writer.writerow([
+            "Stock", "Score", "Entry", "SL", "Target",
+            "RR", "Qty", "Position"
+        ])
+
+        if not results:
+            writer.writerow(["No trades", "", "", "", "", "", "", ""])
+        else:
+            for r in results:
+                writer.writerow([
+                    r.get("stock", ""),
+                    r.get("score", 0),
+                    r.get("entry", 0),
+                    r.get("sl", 0),
+                    r.get("target", 0),
+                    r.get("rr", 0),
+                    r.get("qty", 0),
+                    r.get("position", 0)
+                ])
+
+        output.seek(0)
+
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": "attachment; filename=trades.csv"
+            }
+        )
+
+    except Exception as e:
+        logging.error(f"CSV error: {e}")
+        return {"message": "CSV generation failed"}
