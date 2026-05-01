@@ -1,7 +1,7 @@
-"""Market Router — /api/market  (FIXED — returns real Nifty data)"""
+"""Market Router — /api/market (FIXED for cloud deployment)"""
 from fastapi import APIRouter
-import yfinance as yf
-import logging
+import requests
+import pandas as pd
 
 router = APIRouter()
 
@@ -13,44 +13,65 @@ def market_status():
 @router.get("/nifty")
 def nifty_price():
     """
-    Returns real Nifty50 price + trend from Yahoo Finance.
-    FIX: was returning null placeholder — now returns real data
-    used by index.html loadMarket() to populate the hero badge.
+    Uses direct Yahoo Finance API instead of yfinance library.
+    yfinance fails on cloud servers (Render) — direct requests work.
     """
     try:
-        nifty = yf.download("^NSEI", period="5d", interval="1d", progress=False)
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=5d&interval=1d"
+        
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+        }
 
-        if nifty is None or len(nifty) < 2:
+        res = requests.get(url, headers=headers, timeout=10)
+
+        if res.status_code != 200:
+            # Try query2 as fallback
+            url2 = "https://query2.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=5d&interval=1d"
+            res = requests.get(url2, headers=headers, timeout=10)
+
+        if res.status_code != 200:
             return {
-                "price": None,
-                "prev": None,
-                "change": None,
-                "trend": "SIDEWAYS",
-                "bullish": None,
-                "verdict": "DATA UNAVAILABLE"
+                "price": None, "prev": None, "change": None,
+                "trend": "SIDEWAYS", "bullish": None, "verdict": "DATA UNAVAILABLE"
             }
 
-        latest = float(nifty["Close"].iloc[-1])
-        prev   = float(nifty["Close"].iloc[-2])
-        change = round(((latest - prev) / prev) * 100, 2)
-        trend  = "UP" if latest > prev else "DOWN"
+        data   = res.json()
+        result = data.get("chart", {}).get("result")
+
+        if not result:
+            return {
+                "price": None, "prev": None, "change": None,
+                "trend": "SIDEWAYS", "bullish": None, "verdict": "DATA UNAVAILABLE"
+            }
+
+        closes = result[0]["indicators"]["quote"][0]["close"]
+        closes = [c for c in closes if c is not None]
+
+        if len(closes) < 2:
+            return {
+                "price": None, "prev": None, "change": None,
+                "trend": "SIDEWAYS", "bullish": None, "verdict": "DATA UNAVAILABLE"
+            }
+
+        latest     = round(closes[-1], 2)
+        prev       = round(closes[-2], 2)
+        change_pct = round(((latest - prev) / prev) * 100, 2)
+        trend      = "UP" if latest > prev else "DOWN"
 
         return {
-            "price":   round(latest, 2),
-            "prev":    round(prev, 2),
-            "change":  change,
+            "price":   latest,
+            "prev":    prev,
+            "change":  change_pct,
             "trend":   trend,
             "bullish": trend == "UP",
             "verdict": "BULLISH — market strength" if trend == "UP" else "BEARISH — market caution"
         }
 
     except Exception as e:
-        logging.error(f"Nifty fetch error: {e}")
         return {
-            "price": None,
-            "prev": None,
-            "change": None,
-            "trend": "SIDEWAYS",
-            "bullish": None,
-            "verdict": "DATA ERROR"
+            "price": None, "prev": None, "change": None,
+            "trend": "SIDEWAYS", "bullish": None,
+            "verdict": "DATA UNAVAILABLE"
         }

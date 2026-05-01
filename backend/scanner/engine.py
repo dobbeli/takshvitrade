@@ -79,29 +79,48 @@ YAHOO_CRUMB = get_yahoo_crumb()
 # ── Market Trend ─────────────────────────────────────────────
 def get_market_trend():
     """
-    Returns: (trend, nifty_value, change_pct)
-    trend       → "UP" | "DOWN"
-    nifty_value → latest Nifty50 closing price
-    change_pct  → % change vs previous day (negative = fell)
+    Uses direct requests instead of yfinance — works on Render cloud.
+    yfinance is blocked by Yahoo on cloud server IPs.
     """
     try:
-        nifty = yf.download("^NSEI", period="5d", interval="1d", progress=False)
-        if len(nifty) < 2:
+        url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=5d&interval=1d"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+        }
+
+        res = requests.get(url, headers=headers, timeout=10)
+
+        if res.status_code != 200:
+            url2 = "https://query2.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=5d&interval=1d"
+            res  = requests.get(url2, headers=headers, timeout=10)
+
+        if res.status_code != 200:
             return "SIDEWAYS", None, None
 
-        close_series = nifty["Close"].squeeze()
-        latest     = float(close_series.iloc[-1])
-        prev       = float(close_series.iloc[-2])
+        data   = res.json()
+        result = data.get("chart", {}).get("result")
+
+        if not result:
+            return "SIDEWAYS", None, None
+
+        closes = result[0]["indicators"]["quote"][0]["close"]
+        closes = [c for c in closes if c is not None]
+
+        if len(closes) < 2:
+            return "SIDEWAYS", None, None
+
+        latest     = round(closes[-1], 2)
+        prev       = round(closes[-2], 2)
         change_pct = round(((latest - prev) / prev) * 100, 2)
         trend      = "UP" if latest > prev else "DOWN"
 
-        print(f"📊 Nifty: Rs{round(latest,2)} | Prev: Rs{round(prev,2)} | Change: {change_pct}%")
-        return trend, round(latest, 2), change_pct
+        print(f"Nifty: Rs{latest} | Prev: Rs{prev} | Change: {change_pct}%")
+        return trend, latest, change_pct
 
     except Exception as e:
-        print(f"Warning: Market trend error: {e}")
+        print(f"Market trend error: {e}")
         return "SIDEWAYS", None, None
-
 
 # ── Data Source: Yahoo Finance ────────────────────────────────
 def get_data_from_yahoo(symbol: str):
