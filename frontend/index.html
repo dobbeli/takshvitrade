@@ -702,7 +702,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
     <div class="app-card">
       <div class="app-card-label">Signals Found</div>
       <div class="app-card-val g" id="sig-count">—</div>
-      <div class="app-card-sub">Passed all filters</div>
+      <div class="app-card-sub" id="sig-label">Passed all filters</div>
     </div>
     <div class="app-card">
       <div class="app-card-label">Market</div>
@@ -733,6 +733,24 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
     <div class="scan-loader" id="scan-loader"></div>
     <span id="scan-label">▶ Run Scanner</span>
   </button>
+
+  <!-- TABLE TOOLBAR — professional placement for Export CSV (like Zerodha/TradingView) -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;margin-top:0.25rem">
+    <span style="font-family:var(--font-mono);font-size:0.6rem;color:var(--muted);letter-spacing:0.14em;text-transform:uppercase">
+      Scan Results
+    </span>
+    <button
+      onclick="downloadCSV()"
+      title="Export signals to CSV"
+      style="font-family:var(--font-mono);font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;
+             padding:0.38rem 0.85rem;background:transparent;border:1px solid var(--border2);
+             color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem;
+             transition:all 0.2s;"
+      onmouseover="this.style.borderColor='var(--cyan)';this.style.color='var(--cyan)'"
+      onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted)'">
+      ↓ Export CSV
+    </button>
+  </div>
   <!-- TABLE -->
   <div class="app-table">
     <div class="app-table-head">
@@ -819,7 +837,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 
     <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--muted);line-height:2">
       Sources: Economic Times · Moneycontrol · Reuters · Mint<br/>
-      Recommendation: <span style="color:var(--gold)">Stick to highest-score trades only</span>
+      Recommendation: <span id="news-recommendation" style="color:var(--gold)">Loading market context...</span>
     </div>
   </div>
 
@@ -835,7 +853,9 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 
 <script>
 /* ─── Cursor ─── */
-const API = "https://takshvitrade-api.onrender.com";
+
+// Change this line to your Render backend URL
+const API = "https://takshvi-backend.onrender.com";
 
 const cur = document.getElementById('cursor');
 const ring = document.getElementById('cursor-ring');
@@ -948,17 +968,49 @@ async function loadNews(){
 
     const verdictEl = document.getElementById("news-verdict");
 
+    // FIX 4: Market-aware verdict — news sentiment alone is not enough
+    // News keywords can be BULLISH while Nifty is DOWN — these are independent signals
+    // We now show BOTH and give a combined recommendation
+    const marketTrend = window._marketTrend || 'SIDEWAYS'; // set by loadMarket()
+
+    let newsVerdict, newsColor;
     if(sentiment > 2){
-      verdictEl.textContent = "BULLISH";
-      verdictEl.style.color = "lime";
+      newsVerdict = "BULLISH";
+      newsColor   = "#1ddd8a";
+    } else if(sentiment < -2){
+      newsVerdict = "BEARISH";
+      newsColor   = "#ff4560";
+    } else {
+      newsVerdict = "MIXED";
+      newsColor   = "#f5c018";
     }
-    else if(sentiment < -2){
-      verdictEl.textContent = "BEARISH";
-      verdictEl.style.color = "red";
-    }
-    else{
-      verdictEl.textContent = "MIXED";
-      verdictEl.style.color = "gold";
+
+    verdictEl.textContent = newsVerdict;
+    verdictEl.style.color = newsColor;
+    verdictEl.style.background = "transparent";
+    verdictEl.style.border = "none";
+    verdictEl.style.padding = "0";
+    verdictEl.style.display = "block";
+    verdictEl.style.fontFamily = "var(--font-display)";
+    verdictEl.style.fontWeight = "700";
+    verdictEl.style.fontSize   = "1.8rem";
+
+    // Dynamic recommendation based on BOTH market + news
+    const recEl = document.getElementById('news-recommendation');
+    if(recEl){
+      if(marketTrend === "DOWN"){
+        recEl.textContent = "⚠️ Market is BEARISH — no new trades. Scanner is blocked.";
+        recEl.style.color = "#ff4560";
+      } else if(newsVerdict === "BULLISH" && marketTrend === "UP"){
+        recEl.textContent = "✅ News + Market both BULLISH — good trading environment today.";
+        recEl.style.color = "#1ddd8a";
+      } else if(newsVerdict === "BEARISH" && marketTrend === "UP"){
+        recEl.textContent = "⚠️ Market UP but news BEARISH — trade smallest size, tighten stops.";
+        recEl.style.color = "#f5c018";
+      } else {
+        recEl.textContent = "📊 Mixed signals — trade only highest-score setups (80+).";
+        recEl.style.color = "#f5c018";
+      }
     }
 
     newsLoaded = true;
@@ -1037,7 +1089,30 @@ div.innerHTML = `
   }
   btn.disabled = true;
   loader.classList.add('show');
-  label.textContent = 'Scanning stocks...';
+
+  // ── LIVE TIMER + PROGRESS MESSAGES ──────────────────────────
+  // Shows user scan is running, not frozen
+  // Messages cycle through stages every 2 seconds
+  const progressMessages = [
+    'Checking market trend...',
+    'Fetching 50 stock data (parallel)...',
+    'Checking EMA 20 / 50 / 200 alignment...',
+    'Verifying weekly EMA trend...',
+    'Analysing RSI + Volume...',
+    'Checking 52-week high proximity...',
+    'Calculating ATR stop losses...',
+    'Ranking signals by score...',
+    'Almost done...',
+  ];
+  let elapsed = 0;
+  const timerInterval = setInterval(() => {
+    elapsed++;
+    const msgIndex = Math.min(Math.floor(elapsed / 2), progressMessages.length - 1);
+    label.textContent = `⏱ ${elapsed}s — ${progressMessages[msgIndex]}`;
+  }, 1000);
+
+  const scanStart = Date.now();
+
   try {
     // ✅ CORRECT API (IMPORTANT FIX)
     const res = await fetch(`${API}/run-scan?capital=${capital}`);
@@ -1045,9 +1120,71 @@ div.innerHTML = `
       throw new Error("API failed");
      }
     const data = await res.json();
+
+    // ✅ UPDATE NIFTY (HERO)
+    if (data.nifty) {
+      document.getElementById('nifty-price').textContent = `₹${data.nifty}`;
+      document.getElementById('dashboard-nifty-price').textContent = `₹${data.nifty}`;
+    }
+
+      // ✅ UPDATE TREND
+    if (data.market_trend) {
+       document.getElementById('market-status').textContent = data.market_trend;
+      document.getElementById('app-market-trend').textContent = data.market_trend;
+
+    const dot = document.getElementById('nifty-dot');
+    dot.classList.remove('dot-red','dot-green');
+
+    if (data.market_trend === "UP") {
+      dot.classList.add('dot-green');
+    } else {
+      dot.classList.add('dot-red');
+    }
+  }
     const trades = data.data || [];
+    const changePct = data.change_pct;
 
     document.getElementById('sig-count').textContent = trades.length;
+    // Grammar fix: "1 signal" vs "2 signals"
+    const sigLabel = document.getElementById('sig-label');
+    if(sigLabel) sigLabel.textContent = trades.length === 1 ? 'Signal passed all filters' : 'Signals passed all filters';
+
+    // ── MARKET STATUS BANNER ──
+    const existingBanner = document.getElementById('market-banner');
+    if(existingBanner) existingBanner.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'market-banner';
+
+    // CRASH: Nifty down > 1.5%
+    if(data.market_trend === "DOWN" && changePct !== null && changePct <= -1.5){
+      banner.style = `background:rgba(255,69,96,0.12);border:1px solid rgba(255,69,96,0.5);
+        color:#ff4560;font-family:var(--font-mono);font-size:0.72rem;letter-spacing:0.06em;
+        padding:0.85rem 1.2rem;margin-bottom:1rem;`;
+      banner.innerHTML = `🚨 EXTREME CRASH — Nifty ${changePct}% today. Scanner blocked. 
+        No trades. Protect your capital.`;
+      document.getElementById('signals-body').before(banner);
+
+    // BEARISH: Nifty down 0 to -1.5%
+    } else if(data.market_trend === "DOWN" && trades.length > 0){
+      banner.style = `background:rgba(245,192,24,0.08);border:1px solid rgba(245,192,24,0.3);
+        color:#f5c018;font-family:var(--font-mono);font-size:0.72rem;letter-spacing:0.06em;
+        padding:0.85rem 1.2rem;margin-bottom:1rem;line-height:1.8;`;
+      banner.innerHTML = `⚠️ BEARISH MARKET (Nifty ${changePct}%) — These stocks passed all 
+        6 strategy filters. Position size is reduced to 50%. 
+        Set tighter stop losses. Trade at your own discretion.`;
+      document.getElementById('signals-body').before(banner);
+
+    // BEARISH but no stocks passed
+    } else if(data.market_trend === "DOWN" && trades.length === 0){
+      banner.style = `background:rgba(245,192,24,0.08);border:1px solid rgba(245,192,24,0.3);
+        color:#f5c018;font-family:var(--font-mono);font-size:0.72rem;letter-spacing:0.06em;
+        padding:0.85rem 1.2rem;margin-bottom:1rem;`;
+      banner.innerHTML = `⚠️ BEARISH MARKET (Nifty ${changePct}%) — No stocks passed all 
+        6 strategy conditions today. Wait for a better setup.`;
+      document.getElementById('signals-body').before(banner);
+    }
+    // BULLISH: no banner needed — clean view with best stocks only
     
     const deployed = trades.reduce((sum, t) => sum + (t.position || 0), 0);
 
@@ -1076,7 +1213,7 @@ div.innerHTML = `
   //max score
         const maxScore = Math.max(...trades.map(x => x.score));
         container.innerHTML = trades.map((t) => {
-         let signal = "SKIP";
+         let signal = t.action || "SKIP";
          let color = "#888";
 
         if (t.score >= 80) {
@@ -1092,9 +1229,9 @@ div.innerHTML = `
           signal = "🔥 BEST";
           color = "#00E5C8";
           }
-         const rr = (t.entry && t.stop_loss && t.entry !== t.stop_loss)
-           ? ((t.target - t.entry) / (t.entry - t.stop_loss)).toFixed(2)
-            : "—";
+         const rr = (t.entry && t.sl && t.entry !== t.sl)
+          ? ((t.target - t.entry) / (t.entry - t.sl)).toFixed(2)
+          : "—";
       return `
         <div class="app-row"> 
           <div class="ar-stock"
@@ -1110,16 +1247,19 @@ div.innerHTML = `
          </div>
          <div class="ar-val">₹${Number(t.entry).toLocaleString('en-IN')}</div>
          <div class="ar-val" style="color:var(--red)">
-          ₹${Number(t.stop_loss).toLocaleString('en-IN')}
+          ₹${Number(t.sl).toLocaleString('en-IN')}
          </div>
          <div class="ar-val" style="color:var(--green)">
           ₹${Number(t.target).toLocaleString('en-IN')}
          </div>
          <div class="ar-val">${rr}</div>
-         <div class="ar-val">${t.qty} shares</div>
+         <div class="ar-val">${t.qty} ${t.qty === 1 ? 'share' : 'shares'}
+           ${t.caution ? '<span style="color:#f5c018;font-size:0.6rem;margin-left:4px" title="Bearish market — reduced size">½</span>' : ''}
+           ${t.near_52w_high ? '<span style="color:#00E5C8;font-size:0.6rem;margin-left:4px" title="Near 52-week high — strong trend">★</span>' : ''}
+         </div>
          <div class="ar-val">₹${Number(t.position).toLocaleString('en-IN')}</div>
          <div class="ar-val">
-         <button class="ar-btn" onclick="event.stopPropagation();showTrade('${t.stock}', ${t.entry}, ${t.stop_loss}, ${t.target}, ${t.qty})">
+         <button class="ar-btn" onclick="event.stopPropagation();showTrade('${t.stock}', ${t.entry}, ${t.sl}, ${t.target}, ${t.qty})">
         ${signal}
         </button>
         </div>
@@ -1137,8 +1277,10 @@ div.innerHTML = `
   `;
   }
   finally{
+    clearInterval(timerInterval);   // stop the timer
+    const totalTime = ((Date.now() - scanStart) / 1000).toFixed(1);
     loader.classList.remove('show');
-    label.textContent = '▶ Run Scanner';
+    label.textContent = `▶ Run Scanner  (last scan: ${totalTime}s)`;
     btn.disabled = false;
   }
 }
@@ -1171,53 +1313,68 @@ Rules:
 • Avoid gap-up > 2%
   `);
 }
-/* ─── MARKET LIVE DATA (FINAL) ─── */
+/* ─── MARKET LIVE DATA (FIXED) ─── */
 async function loadMarket(){
   try{
-    const res = await fetch(`${API}/market`);
+    // FIX 1: Was calling /market (wrong) — now calls /api/market/nifty (real data endpoint)
+    const res = await fetch(`${API}/api/market/nifty`);
     const data = await res.json();
 
-    // HERO
-    document.getElementById('nifty-price').textContent = `₹${data.price}`;
+    // FIX 1: NULL GUARD — never show ₹undefined when price is null
+    const price  = (data.price != null) ? `₹${Number(data.price).toLocaleString('en-IN')}` : '₹--';
+    const trend  = data.trend  || 'SIDEWAYS';
+    const verdict= data.verdict|| 'SIDEWAYS — neutral market';
+    const color  = trend === "UP" ? "lime" : trend === "DOWN" ? "#ff4560" : "#f5c018";
+    const changeSign = trend === "UP" ? "▲" : trend === "DOWN" ? "▼" : "—";
+    const changeTxt  = (data.change != null) ? `${changeSign} ${Math.abs(data.change)}%` : changeSign;
 
-    // DASHBOARD
-    document.getElementById('dashboard-nifty-price').textContent = `₹${data.price}`;
-    const trend = data.trend;
-    const color = trend === "UP" ? "lime" : "red";
-    document.getElementById('market-status').textContent = trend;
-    document.getElementById('market-sub').textContent =
-    trend === "UP" ? "Bullish market" : "Bearish market";
+    // HERO badge — never undefined again
+    document.getElementById('nifty-price').textContent = price;
+    document.getElementById('nifty-verdict').textContent = verdict;
+
+    // DASHBOARD preview section
+    const dashNifty = document.getElementById('dashboard-nifty-price');
+    if(dashNifty) dashNifty.textContent = price;
+
+    const marketStatus = document.getElementById('market-status');
+    if(marketStatus) marketStatus.textContent = trend;
+
+    const marketSub = document.getElementById('market-sub');
+    if(marketSub) marketSub.textContent =
+      trend === "UP" ? "Bullish market" : trend === "DOWN" ? "Bearish market" : "Sideways";
+
+    // Dot colour
     const dot = document.getElementById('nifty-dot');
     dot.classList.remove('dot-red','dot-green');
-    if(trend === "UP"){
-      dot.classList.add('dot-green');
-     }else{
-      dot.classList.add('dot-red');
-    } 
-// (verdict)
- document.getElementById('nifty-verdict').textContent =
-  trend === "UP" ? "BULLISH — market strength" : "BEARISH — market caution";
+    dot.classList.add(trend === "UP" ? 'dot-green' : 'dot-red');
 
-    // DASHBOARD TREND
+    // Nifty change line
+    const niftyChg = document.getElementById('nifty-change');
+    if(niftyChg){ niftyChg.textContent = changeTxt; niftyChg.style.color = color; }
+
+    // Market tab cards
+    const appNiftyPrice = document.getElementById('app-nifty-price');
+    if(appNiftyPrice) appNiftyPrice.textContent = price;
+
+    const appTrend = document.getElementById('app-market-trend');
+    if(appTrend){ appTrend.textContent = trend; appTrend.style.color = color; }
+
+    // Dashboard market trend row
     const trendEl = document.getElementById('market-trend');
-    trendEl.textContent = trend;
-    trendEl.style.color = color;
+    if(trendEl){ trendEl.textContent = trend; trendEl.style.color = color; }
 
-    document.getElementById('market-note').textContent =
-      trend === "UP" ? "Bullish momentum" : "Bearish pressure";
+    const mNote = document.getElementById('market-note');
+    if(mNote) mNote.textContent = trend === "UP" ? "Bullish momentum" : trend === "DOWN" ? "Bearish pressure" : "Sideways momentum";
 
-    document.getElementById('nifty-change').textContent =
-      trend === "UP" ? "▲ Positive" : "▼ Negative";
-
-    document.getElementById('nifty-change').style.color = color;
-
-    // APP MARKET TAB
-    document.getElementById('app-nifty-price').textContent = `₹${data.price}`;
-    document.getElementById('app-market-trend').textContent = trend;
-    document.getElementById('app-market-trend').style.color = color;
+    // Store trend globally for news recommendation
+    window._marketTrend = trend;
 
   }catch(err){
-    console.log("Market error", err);
+    // Graceful fallback — never crash, never show undefined
+    document.getElementById('nifty-price').textContent = '₹--';
+    document.getElementById('nifty-verdict').textContent = 'MARKET — data unavailable';
+    window._marketTrend = 'SIDEWAYS';
+    console.warn("Market fetch failed:", err);
   }
 }
 
@@ -1343,6 +1500,15 @@ function hoverEnd(){
   }
 }
 
+function downloadCSV(){
+  const capital = document.getElementById("capital-input").value;
+  if(!capital || capital < 10000){
+    alert("Enter minimum ₹10,000 capital first");
+    return;
+  }
+  // FIX: Was hardcoded to 127.0.0.1:8000 — now uses API variable (works on Render/cloud too)
+  window.open(`${API}/download-csv?capital=${capital}`);
+}
 </script>
 <!-- ─── FULL CHART MODAL ─── -->
 <div id="chart-modal" style="
