@@ -405,11 +405,94 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   .f-right{text-align:center}
   .f-links{justify-content:center}
   .app-grid{grid-template-columns:repeat(2,1fr)}
-  .app-table-head,.app-row{grid-template-columns:1.5fr 0.7fr 1fr 1fr 0.8fr 1.2fr;font-size:0.7rem}
-  .app-table-head span:nth-child(4),
-  .app-row>*:nth-child(4),
-  .app-table-head span:nth-child(5),
-  .app-row>*:nth-child(5){display:none}
+
+  /* ── MOBILE: hide desktop table, show cards ── */
+  .app-table-head{display:none !important}
+  .app-row{display:none !important}
+  .mobile-signal-card{display:block !important}
+}
+
+/* ── MOBILE SIGNAL CARD ── */
+.mobile-signal-card{
+  display:none;
+  background:var(--card);
+  border:1px solid var(--border2);
+  border-radius:8px;
+  padding:1rem 1.25rem;
+  margin-bottom:0.75rem;
+}
+.msc-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:0.85rem;
+}
+.msc-stock{
+  font-family:var(--font-display);
+  font-size:1.1rem;
+  font-weight:700;
+  color:var(--white);
+  letter-spacing:0.02em;
+}
+.msc-badge{
+  font-family:var(--font-mono);
+  font-size:0.65rem;
+  letter-spacing:0.08em;
+  padding:0.3rem 0.75rem;
+  border-radius:4px;
+  font-weight:500;
+}
+.msc-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:0.6rem;
+  margin-bottom:0.85rem;
+}
+.msc-item{
+  background:var(--dark);
+  border-radius:4px;
+  padding:0.5rem 0.6rem;
+}
+.msc-label{
+  font-family:var(--font-mono);
+  font-size:0.55rem;
+  color:var(--muted);
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+  margin-bottom:0.2rem;
+}
+.msc-value{
+  font-family:var(--font-mono);
+  font-size:0.82rem;
+  color:var(--white);
+  font-weight:500;
+}
+.msc-footer{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding-top:0.75rem;
+  border-top:1px solid var(--border);
+}
+.msc-score-bar{
+  display:flex;
+  align-items:center;
+  gap:0.5rem;
+}
+.msc-score-num{
+  font-family:var(--font-mono);
+  font-size:0.75rem;
+  color:var(--muted);
+}
+.msc-action-btn{
+  font-family:var(--font-mono);
+  font-size:0.7rem;
+  letter-spacing:0.08em;
+  padding:0.45rem 1.1rem;
+  border:none;
+  border-radius:4px;
+  cursor:pointer;
+  font-weight:500;
 }
 </style>
 </head>
@@ -853,9 +936,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 
 <script>
 /* ─── Cursor ─── */
-
-// Change this line to your Render backend URL
-const API = "https://takshvitrade-api.onrender.com";
+const API = "http://127.0.0.1:8000";
 
 const cur = document.getElementById('cursor');
 const ring = document.getElementById('cursor-ring');
@@ -1232,39 +1313,94 @@ div.innerHTML = `
          const rr = (t.entry && t.sl && t.entry !== t.sl)
           ? ((t.target - t.entry) / (t.entry - t.sl)).toFixed(2)
           : "—";
-      return `
+
+      // Badge colours
+      const badgeBg    = signal === "🔥 BEST" ? "var(--cyan)"  : signal === "BUY" ? "var(--green)" : "var(--gold)";
+      const badgeColor = signal === "🔥 BEST" ? "var(--black)" : "var(--black)";
+
+      // Desktop row (hidden on mobile via CSS)
+      const desktopRow = `
         <div class="app-row"> 
           <div class="ar-stock"
-          onclick="showChart('${t.stock}')"
-          onmouseenter="hoverStart(event, '${t.stock}')"
-          onmousemove="hoverMove(event)"
-          onmouseleave="hoverEnd()"
-        >
-         ${t.stock}
+            onclick="showChart('${t.stock}')"
+            onmouseenter="hoverStart(event, '${t.stock}')"
+            onmousemove="hoverMove(event)"
+            onmouseleave="hoverEnd()">
+            ${t.stock}
           </div>
-         <div class="ar-score" style="color:${color}">
-          ${t.score}
-         </div>
-         <div class="ar-val">₹${Number(t.entry).toLocaleString('en-IN')}</div>
-         <div class="ar-val" style="color:var(--red)">
-          ₹${Number(t.sl).toLocaleString('en-IN')}
-         </div>
-         <div class="ar-val" style="color:var(--green)">
-          ₹${Number(t.target).toLocaleString('en-IN')}
-         </div>
-         <div class="ar-val">${rr}</div>
-         <div class="ar-val">${t.qty} ${t.qty === 1 ? 'share' : 'shares'}
-           ${t.caution ? '<span style="color:#f5c018;font-size:0.6rem;margin-left:4px" title="Bearish market — reduced size">½</span>' : ''}
-           ${t.near_52w_high ? '<span style="color:#00E5C8;font-size:0.6rem;margin-left:4px" title="Near 52-week high — strong trend">★</span>' : ''}
-         </div>
-         <div class="ar-val">₹${Number(t.position).toLocaleString('en-IN')}</div>
-         <div class="ar-val">
-         <button class="ar-btn" onclick="event.stopPropagation();showTrade('${t.stock}', ${t.entry}, ${t.sl}, ${t.target}, ${t.qty})">
-        ${signal}
-        </button>
-        </div>
-      </div>
-    `;
+          <div class="ar-score" style="color:${color}">${t.score}</div>
+          <div class="ar-val">₹${Number(t.entry).toLocaleString('en-IN')}</div>
+          <div class="ar-val" style="color:var(--red)">₹${Number(t.sl).toLocaleString('en-IN')}</div>
+          <div class="ar-val" style="color:var(--green)">₹${Number(t.target).toLocaleString('en-IN')}</div>
+          <div class="ar-val">${rr}</div>
+          <div class="ar-val">${t.qty} ${t.qty === 1 ? 'share' : 'shares'}
+            ${t.caution ? '<span style="color:#f5c018;font-size:0.6rem;margin-left:4px" title="Bearish market — reduced size">½</span>' : ''}
+            ${t.near_52w_high ? '<span style="color:#00E5C8;font-size:0.6rem;margin-left:4px" title="Near 52-week high — strong trend">★</span>' : ''}
+          </div>
+          <div class="ar-val">₹${Number(t.position).toLocaleString('en-IN')}</div>
+          <div class="ar-val">
+            <button class="ar-btn" onclick="event.stopPropagation();showTrade('${t.stock}', ${t.entry}, ${t.sl}, ${t.target}, ${t.qty})">
+              ${signal}
+            </button>
+          </div>
+        </div>`;
+
+      // Mobile card (shown only on mobile via CSS)
+      const mobileCard = `
+        <div class="mobile-signal-card">
+          <div class="msc-header">
+            <div>
+              <div class="msc-stock">${t.stock}</div>
+              <div style="font-family:var(--font-mono);font-size:0.6rem;color:var(--muted);margin-top:2px">
+                Score: <span style="color:${color}">${t.score}</span>
+                ${t.near_52w_high ? ' · <span style="color:var(--cyan)">★ Near 52W High</span>' : ''}
+                ${t.caution ? ' · <span style="color:var(--gold)">½ Bearish Size</span>' : ''}
+              </div>
+            </div>
+            <span class="msc-badge" style="background:${badgeBg};color:${badgeColor}">${signal}</span>
+          </div>
+
+          <div class="msc-grid">
+            <div class="msc-item">
+              <div class="msc-label">Entry</div>
+              <div class="msc-value">₹${Number(t.entry).toLocaleString('en-IN')}</div>
+            </div>
+            <div class="msc-item">
+              <div class="msc-label">Stop Loss</div>
+              <div class="msc-value" style="color:var(--red)">₹${Number(t.sl).toLocaleString('en-IN')}</div>
+            </div>
+            <div class="msc-item">
+              <div class="msc-label">Target</div>
+              <div class="msc-value" style="color:var(--green)">₹${Number(t.target).toLocaleString('en-IN')}</div>
+            </div>
+            <div class="msc-item">
+              <div class="msc-label">R:R Ratio</div>
+              <div class="msc-value">${rr}</div>
+            </div>
+            <div class="msc-item">
+              <div class="msc-label">Quantity</div>
+              <div class="msc-value">${t.qty} ${t.qty === 1 ? 'share' : 'shares'}</div>
+            </div>
+            <div class="msc-item">
+              <div class="msc-label">Position</div>
+              <div class="msc-value">₹${Number(t.position).toLocaleString('en-IN')}</div>
+            </div>
+          </div>
+
+          <div class="msc-footer">
+            <div class="msc-score-bar">
+              <span class="msc-score-num" style="color:var(--muted)">Upside</span>
+              <span class="msc-score-num" style="color:var(--green)">+${t.upside_pct}%</span>
+            </div>
+            <button class="msc-action-btn"
+              style="background:${badgeBg};color:${badgeColor}"
+              onclick="showTrade('${t.stock}', ${t.entry}, ${t.sl}, ${t.target}, ${t.qty})">
+              View Trade Plan
+            </button>
+          </div>
+        </div>`;
+
+      return desktopRow + mobileCard;
   }).join('');
 }
   } catch(err){
