@@ -269,17 +269,18 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 .app-table{
   background:var(--card);
   border:1px solid var(--border);
-  overflow:hidden;
+  overflow-x:auto;       /* horizontal scroll on mobile */
+  overflow-y:hidden;
   margin-bottom:1.5rem;
+  -webkit-overflow-scrolling:touch; /* smooth scroll on iOS */
 }
-
-/* HEADER */
 .app-table-head{
   display:grid;
   grid-template-columns:1.6fr 0.8fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1.2fr;
   padding:1rem 1.2rem;
   background:var(--dark);
   border-bottom:1px solid var(--border);
+  min-width:900px;       /* never shrink below this — forces scroll */
 }
 .app-table-head span{
   font-family:var(--font-mono);
@@ -302,9 +303,9 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   padding:1rem 1.2rem;
   border-bottom:1px solid var(--border);
   align-items:center;
-  /*transition:background 0.2s;*/
   transition: all 0.2s ease;
   cursor: pointer;
+  min-width:900px;       /* matches header — forces horizontal scroll on mobile */
 }
 
 .app-row:hover{
@@ -405,94 +406,11 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   .f-right{text-align:center}
   .f-links{justify-content:center}
   .app-grid{grid-template-columns:repeat(2,1fr)}
-
-  /* ── MOBILE: hide desktop table, show cards ── */
-  .app-table-head{display:none !important}
-  .app-row{display:none !important}
-  .mobile-signal-card{display:block !important}
 }
 
-/* ── MOBILE SIGNAL CARD ── */
+/* ── MOBILE SIGNAL CARD — hidden, not used ── */
 .mobile-signal-card{
-  display:none;
-  background:var(--card);
-  border:1px solid var(--border2);
-  border-radius:8px;
-  padding:1rem 1.25rem;
-  margin-bottom:0.75rem;
-}
-.msc-header{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:0.85rem;
-}
-.msc-stock{
-  font-family:var(--font-display);
-  font-size:1.1rem;
-  font-weight:700;
-  color:var(--white);
-  letter-spacing:0.02em;
-}
-.msc-badge{
-  font-family:var(--font-mono);
-  font-size:0.65rem;
-  letter-spacing:0.08em;
-  padding:0.3rem 0.75rem;
-  border-radius:4px;
-  font-weight:500;
-}
-.msc-grid{
-  display:grid;
-  grid-template-columns:1fr 1fr 1fr;
-  gap:0.6rem;
-  margin-bottom:0.85rem;
-}
-.msc-item{
-  background:var(--dark);
-  border-radius:4px;
-  padding:0.5rem 0.6rem;
-}
-.msc-label{
-  font-family:var(--font-mono);
-  font-size:0.55rem;
-  color:var(--muted);
-  letter-spacing:0.1em;
-  text-transform:uppercase;
-  margin-bottom:0.2rem;
-}
-.msc-value{
-  font-family:var(--font-mono);
-  font-size:0.82rem;
-  color:var(--white);
-  font-weight:500;
-}
-.msc-footer{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding-top:0.75rem;
-  border-top:1px solid var(--border);
-}
-.msc-score-bar{
-  display:flex;
-  align-items:center;
-  gap:0.5rem;
-}
-.msc-score-num{
-  font-family:var(--font-mono);
-  font-size:0.75rem;
-  color:var(--muted);
-}
-.msc-action-btn{
-  font-family:var(--font-mono);
-  font-size:0.7rem;
-  letter-spacing:0.08em;
-  padding:0.45rem 1.1rem;
-  border:none;
-  border-radius:4px;
-  cursor:pointer;
-  font-weight:500;
+  display:none !important;
 }
 </style>
 </head>
@@ -1351,10 +1269,10 @@ div.innerHTML = `
           <div class="msc-header">
             <div>
               <div class="msc-stock">${t.stock}</div>
-              <div style="font-family:var(--font-mono);font-size:0.6rem;color:var(--muted);margin-top:2px">
-                Score: <span style="color:${color}">${t.score}</span>
-                ${t.near_52w_high ? ' · <span style="color:var(--cyan)">★ Near 52W High</span>' : ''}
-                ${t.caution ? ' · <span style="color:var(--gold)">½ Bearish Size</span>' : ''}
+              <div style="font-family:var(--font-mono);font-size:0.68rem;color:#5a7a96;margin-top:4px;display:flex;gap:0.5rem;flex-wrap:wrap">
+                <span>Score <span style="color:${color};font-weight:600">${t.score}</span></span>
+                ${t.near_52w_high ? '<span style="color:#00e5c8">★ 52W High</span>' : ''}
+                ${t.caution ? '<span style="color:#f5c018">½ Bearish Size</span>' : ''}
               </div>
             </div>
             <span class="msc-badge" style="background:${badgeBg};color:${badgeColor}">${signal}</span>
