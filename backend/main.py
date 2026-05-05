@@ -48,13 +48,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://takshvitrade.vercel.app",
-        "https://takshvitrade.com",
-        "https://www.takshvitrade.com",
-        "*"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -123,12 +117,8 @@ def get_chart(symbol: str = "INFY.NS"):
 @app.get("/run-scan")
 def run_scan(capital: int = 50000):
     try:
-        # ✅ MARKET DATA
         market_trend, nifty_value, change_pct = get_market_trend()
-
-        # ✅ SCAN
         results = run_full_scan(capital=capital)
-
         return {
             "count":        len(results),
             "data":         results,
@@ -136,15 +126,29 @@ def run_scan(capital: int = 50000):
             "nifty":        nifty_value,
             "change_pct":   change_pct,
         }
-
     except Exception as e:
         logging.error(f"Scan error: {e}")
+        return {"count": 0, "data": [], "market_trend": "SIDEWAYS", "nifty": None, "change_pct": None}
+
+
+@app.get("/run-master-scan")
+def master_scan(capital: int = 50000):
+    """
+    Complete next-day trading plan in one call.
+    Returns: long_signals, pre_breakout, short_signals, pre_breakdown, relative_strength
+    """
+    try:
+        from scanner.engine import run_master_scan
+        result = run_master_scan(capital=capital, risk_amount=int(capital * 0.01))
+        return result
+    except Exception as e:
+        logging.error(f"Master scan error: {e}")
         return {
-            "count":        0,
-            "data":         [],
-            "market_trend": "SIDEWAYS",
-            "nifty":        None,
-            "change_pct":   None,
+            "market_trend": "SIDEWAYS", "nifty": None, "change_pct": None,
+            "scan_time": 0, "is_crash": False,
+            "long_signals": [], "pre_breakout": [],
+            "short_signals": [], "pre_breakdown": [],
+            "relative_strength": [],
         }
 
 # ===============================
