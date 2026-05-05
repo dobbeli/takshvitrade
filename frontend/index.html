@@ -1075,6 +1075,136 @@ div.innerHTML = `
   }
 }
 /* ─── RUN SCANNER (FINAL CLEAN VERSION) ─── */
+  // ── Helper: render one trade row (long/pre-breakout) ─────────
+  function renderLongRow(t, isBearish){
+    const color = t.score >= 83 ? '#00e5c8' : t.score >= 70 ? '#1ddd8a' : '#f5c018';
+    const action = t.action || 'BUY';
+    const badgeBg = action.includes('BEST') ? '#00e5c8' : action === 'BUY STOP' ? '#6c8ebf' : '#1ddd8a';
+    return `
+      <div class="app-row" onclick="showChart('${t.stock}')">
+        <div class="ar-stock">
+          ${t.stock}
+          <br><span style="font-size:0.6rem;color:#3d5068">
+            ${t.near_52w_high ? '★ 52W High · ' : ''}
+            ${isBearish || t.caution ? '½ size · ' : ''}
+            ${t.signal_type === 'PRE_BREAKOUT' ? `${t.distance_to_breakout}% to breakout` : ''}
+          </span>
+        </div>
+        <div class="ar-score" style="color:${color}">${t.score}</div>
+        <div class="ar-val">₹${Number(t.entry).toLocaleString('en-IN')}</div>
+        <div class="ar-val" style="color:#ff4560">₹${Number(t.sl).toLocaleString('en-IN')}</div>
+        <div class="ar-val" style="color:#1ddd8a">₹${Number(t.target).toLocaleString('en-IN')}</div>
+        <div class="ar-val">${t.rr}</div>
+        <div class="ar-val">${t.qty} ${t.qty===1?'share':'shares'}</div>
+        <div class="ar-val">₹${Number(t.position).toLocaleString('en-IN')}</div>
+        <div class="ar-val">
+          <button class="ar-btn" style="background:${badgeBg};color:#000"
+            onclick="event.stopPropagation();showTrade('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty})">
+            ${action === 'BUY STOP' ? '⏳ BUY STOP' : action.includes('BEST') ? '🔥 BEST' : action}
+          </button>
+        </div>
+      </div>`;
+  }
+
+  // ── Helper: render one short row ──────────────────────────────
+  function renderShortRow(t){
+    const color = t.score >= 83 ? '#ff4560' : '#ff7a8a';
+    const action = t.action || 'SHORT';
+    const badgeBg = action.includes('BEST') ? '#ff4560' : action === 'SELL STOP' ? '#8b3a3a' : '#c0392b';
+    return `
+      <div class="app-row" onclick="showChart('${t.stock}')">
+        <div class="ar-stock">
+          ${t.stock}
+          <br><span style="font-size:0.6rem;color:#3d5068">
+            ${t.near_52w_low ? '↓ Near 52W Low · ' : ''}
+            ${t.signal_type === 'PRE_BREAKDOWN' ? `${t.distance_to_breakdown}% to breakdown` : ''}
+            ${t.caution ? '⚠ Counter-trend' : ''}
+          </span>
+        </div>
+        <div class="ar-score" style="color:${color}">${t.score}</div>
+        <div class="ar-val">₹${Number(t.entry).toLocaleString('en-IN')}</div>
+        <div class="ar-val" style="color:#1ddd8a">₹${Number(t.sl).toLocaleString('en-IN')}</div>
+        <div class="ar-val" style="color:#ff4560">₹${Number(t.target).toLocaleString('en-IN')}</div>
+        <div class="ar-val">${t.rr}</div>
+        <div class="ar-val">${t.qty} ${t.qty===1?'share':'shares'}</div>
+        <div class="ar-val">₹${Number(t.position).toLocaleString('en-IN')}</div>
+        <div class="ar-val">
+          <button class="ar-btn" style="background:${badgeBg};color:#fff;border-color:${badgeBg}"
+            onclick="event.stopPropagation();showTrade('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty})">
+            ${action === 'SELL STOP' ? '⏳ SELL STOP' : action.includes('BEST') ? '▼ BEST SHORT' : '▼ SHORT'}
+          </button>
+        </div>
+      </div>`;
+  }
+
+  // ── Helper: render a section ──────────────────────────────────
+  function renderSection(id, icon, title, badge, badgeColor, rows, emptyMsg, exportFn){
+    const el = document.getElementById(id);
+    if(!el) return;
+    const count = rows.length;
+    el.innerHTML = `
+      <div class="section-hdr" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="color:${badgeColor};font-size:0.75rem">${icon}</span>
+          <span style="font-family:var(--font-mono);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#5a7a96">${title}</span>
+          <span style="font-family:var(--font-mono);font-size:0.65rem;padding:2px 8px;border-radius:3px;background:${badgeColor}20;color:${badgeColor};border:1px solid ${badgeColor}40">
+            ${count} ${count===1?'STOCK':'STOCKS'}
+          </span>
+        </div>
+        ${count > 0 ? `<button onclick="${exportFn}" style="font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;padding:4px 10px;background:transparent;border:1px solid #1e2836;color:#3d5068;cursor:pointer;border-radius:3px">↓ EXPORT CSV</button>` : ''}
+      </div>
+      <div class="app-table">
+        <div class="app-table-head">
+          <span>STOCK</span><span>SCORE</span><span>ENTRY ₹</span><span>SL ₹</span><span>TARGET ₹</span><span>RR</span><span>QTY</span><span>POSITION ₹</span><span>ACTION</span>
+        </div>
+        ${count === 0
+          ? `<div style="text-align:center;padding:1.5rem;color:#3d5068;font-family:var(--font-mono);font-size:0.72rem">${emptyMsg}</div>`
+          : rows.join('')
+        }
+      </div>`;
+  }
+
+  // ── Helper: render relative strength section ──────────────────
+  function renderRS(stocks){
+    const el = document.getElementById('section-rs');
+    if(!el) return;
+    const count = stocks.length;
+    el.innerHTML = `
+      <div class="section-hdr" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="color:#00e5c8;font-size:0.75rem">⚡</span>
+          <span style="font-family:var(--font-mono);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#5a7a96">RELATIVE STRENGTH — BEATING NIFTY TODAY</span>
+          <span style="font-family:var(--font-mono);font-size:0.65rem;padding:2px 8px;border-radius:3px;background:#00e5c820;color:#00e5c8;border:1px solid #00e5c840">WATCHLIST</span>
+        </div>
+      </div>
+      <div class="app-table">
+        <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1.2fr 0.8fr;padding:7px 12px;background:#080b0e;border-bottom:1px solid #181f28;min-width:700px">
+          ${['STOCK','TODAY %','NIFTY %','OUTPERFORMANCE','STRENGTH BAR','SIGNAL'].map(h=>`<span style="font-family:var(--font-mono);font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#3d5068;text-align:center">${h}</span>`).join('')}
+        </div>
+        ${count === 0
+          ? `<div style="text-align:center;padding:1.5rem;color:#3d5068;font-family:var(--font-mono);font-size:0.72rem">No stocks outperforming Nifty today</div>`
+          : stocks.map(s => {
+              const barW = Math.min(100, s.outperformance * 20);
+              const tc   = s.today_pct >= 0 ? '#1ddd8a' : '#ff4560';
+              return `
+                <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1.2fr 0.8fr;padding:9px 12px;border-bottom:1px solid #0f1520;align-items:center;cursor:pointer;min-width:700px" onclick="showChart('${s.stock}')">
+                  <span style="font-family:var(--font-display);font-size:0.85rem;font-weight:600;color:#e8f0f8">${s.stock}</span>
+                  <span style="font-family:var(--font-mono);font-size:0.8rem;color:${tc};text-align:center">${s.today_pct >= 0 ? '+' : ''}${s.today_pct}%</span>
+                  <span style="font-family:var(--font-mono);font-size:0.8rem;color:#ff4560;text-align:center">${s.nifty_pct}%</span>
+                  <span style="font-family:var(--font-mono);font-size:0.8rem;color:#00e5c8;text-align:center">+${s.outperformance}%</span>
+                  <div style="text-align:center">
+                    <div style="background:#0a0d10;border-radius:3px;height:5px;width:100px;display:inline-block">
+                      <div style="background:#1ddd8a;height:5px;border-radius:3px;width:${barW}%"></div>
+                    </div>
+                  </div>
+                  <span style="font-family:var(--font-mono);font-size:0.65rem;padding:3px 8px;border-radius:3px;background:#00e5c810;color:#00e5c8;border:1px solid #00e5c830;text-align:center;cursor:pointer">WATCH</span>
+                </div>`;
+            }).join('')
+        }
+      </div>`;
+  }
+
+  // ── MAIN SCAN FUNCTION ────────────────────────────────────────
   async function runScan(){
   const btn    = document.getElementById('scan-btn');
   const loader = document.getElementById('scan-loader');
@@ -1082,259 +1212,127 @@ div.innerHTML = `
   const capEl  = document.getElementById('capital-input');
   const capital = capEl ? Math.floor(Number(capEl.value)) || 0 : 0;
   document.getElementById('capital-display').textContent = `₹${capital.toLocaleString('en-IN')}`;
-  if(capital < 10000){
-    alert('Enter minimum ₹10,000 capital');
-    return;
-  }
+  if(capital < 10000){ alert('Enter minimum ₹10,000 capital'); return; }
+
   btn.disabled = true;
   loader.classList.add('show');
 
-  // ── LIVE TIMER + PROGRESS MESSAGES ──────────────────────────
-  // Shows user scan is running, not frozen
-  // Messages cycle through stages every 2 seconds
   const progressMessages = [
-    'Checking market trend...',
-    'Fetching 50 stock data (parallel)...',
-    'Checking EMA 20 / 50 / 200 alignment...',
-    'Verifying weekly EMA trend...',
-    'Analysing RSI + Volume...',
-    'Checking 52-week high proximity...',
-    'Calculating ATR stop losses...',
-    'Ranking signals by score...',
-    'Almost done...',
+    'Checking market trend...','Fetching 50 stocks (parallel)...',
+    'Scanning long setups...','Scanning short setups...',
+    'Finding pre-breakout stocks...','Finding pre-breakdown stocks...',
+    'Calculating relative strength...','Ranking all signals...','Almost done...',
   ];
   let elapsed = 0;
   const timerInterval = setInterval(() => {
     elapsed++;
-    const msgIndex = Math.min(Math.floor(elapsed / 2), progressMessages.length - 1);
-    label.textContent = `⏱ ${elapsed}s — ${progressMessages[msgIndex]}`;
+    const msg = progressMessages[Math.min(Math.floor(elapsed/2), progressMessages.length-1)];
+    label.textContent = `⏱ ${elapsed}s — ${msg}`;
   }, 1000);
 
   const scanStart = Date.now();
 
   try {
-    // ✅ CORRECT API (IMPORTANT FIX)
-    const res = await fetch(`${API}/run-scan?capital=${capital}`);
-     if (!res.ok) {
-      throw new Error("API failed");
-     }
+    const res = await fetch(`${API}/run-master-scan?capital=${capital}`);
+    if(!res.ok) throw new Error("API failed");
     const data = await res.json();
 
-    // ✅ UPDATE NIFTY (HERO)
-    if (data.nifty) {
-      document.getElementById('nifty-price').textContent = `₹${data.nifty}`;
-      document.getElementById('dashboard-nifty-price').textContent = `₹${data.nifty}`;
+    // Update market cards
+    const niftyFmt = data.nifty ? `₹${Number(data.nifty).toLocaleString('en-IN')}` : '₹--';
+    ['nifty-price','dashboard-nifty-price','app-nifty-price'].forEach(id => {
+      const el = document.getElementById(id); if(el) el.textContent = niftyFmt;
+    });
+    if(data.market_trend){
+      const trend = data.market_trend;
+      const color = trend==='UP' ? '#1ddd8a' : '#ff4560';
+      ['market-status','app-market-trend'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el){ el.textContent = trend; el.style.color = color; }
+      });
+      const dot = document.getElementById('nifty-dot');
+      if(dot){ dot.classList.remove('dot-red','dot-green'); dot.classList.add(trend==='UP'?'dot-green':'dot-red'); }
+      const sub = document.getElementById('market-sub');
+      if(sub) sub.textContent = trend==='UP' ? 'Bullish market' : 'Bearish market';
     }
 
-      // ✅ UPDATE TREND
-    if (data.market_trend) {
-       document.getElementById('market-status').textContent = data.market_trend;
-      document.getElementById('app-market-trend').textContent = data.market_trend;
-
-    const dot = document.getElementById('nifty-dot');
-    dot.classList.remove('dot-red','dot-green');
-
-    if (data.market_trend === "UP") {
-      dot.classList.add('dot-green');
-    } else {
-      dot.classList.add('dot-red');
-    }
-  }
-    const trades = data.data || [];
-    const changePct = data.change_pct;
-
-    document.getElementById('sig-count').textContent = trades.length;
-    // Grammar fix: "1 signal" vs "2 signals"
+    // Total signals count
+    const totalSig = (data.long_signals||[]).length + (data.short_signals||[]).length;
+    const sigCount = document.getElementById('sig-count');
+    if(sigCount) sigCount.textContent = totalSig;
     const sigLabel = document.getElementById('sig-label');
-    if(sigLabel) sigLabel.textContent = trades.length === 1 ? 'Signal passed all filters' : 'Signals passed all filters';
+    if(sigLabel) sigLabel.textContent = totalSig===1 ? 'Signal passed all filters' : 'Signals passed all filters';
 
-    // ── MARKET STATUS BANNER ──
-    const existingBanner = document.getElementById('market-banner');
-    if(existingBanner) existingBanner.remove();
+    // Total deployed
+    const allTrades = [...(data.long_signals||[]), ...(data.short_signals||[]),
+                       ...(data.pre_breakout||[]), ...(data.pre_breakdown||[])];
+    const deployed = allTrades.reduce((s,t) => s + (t.position||0), 0);
+    const depEl = document.getElementById('capital-deployed');
+    if(depEl) depEl.textContent = `₹${deployed.toLocaleString('en-IN')}`;
 
-    const banner = document.createElement('div');
-    banner.id = 'market-banner';
-
-    // CRASH: Nifty down > 1.5%
-    if(data.market_trend === "DOWN" && changePct !== null && changePct <= -1.5){
-      banner.style = `background:rgba(255,69,96,0.12);border:1px solid rgba(255,69,96,0.5);
-        color:#ff4560;font-family:var(--font-mono);font-size:0.72rem;letter-spacing:0.06em;
-        padding:0.85rem 1.2rem;margin-bottom:1rem;`;
-      banner.innerHTML = `🚨 EXTREME CRASH — Nifty ${changePct}% today. Scanner blocked. 
-        No trades. Protect your capital.`;
-      document.getElementById('signals-body').before(banner);
-
-    // BEARISH: Nifty down 0 to -1.5%
-    } else if(data.market_trend === "DOWN" && trades.length > 0){
-      banner.style = `background:rgba(245,192,24,0.08);border:1px solid rgba(245,192,24,0.3);
-        color:#f5c018;font-family:var(--font-mono);font-size:0.72rem;letter-spacing:0.06em;
-        padding:0.85rem 1.2rem;margin-bottom:1rem;line-height:1.8;`;
-      banner.innerHTML = `⚠️ BEARISH MARKET (Nifty ${changePct}%) — These stocks passed all 
-        6 strategy filters. Position size is reduced to 50%. 
-        Set tighter stop losses. Trade at your own discretion.`;
-      document.getElementById('signals-body').before(banner);
-
-    // BEARISH but no stocks passed
-    } else if(data.market_trend === "DOWN" && trades.length === 0){
-      banner.style = `background:rgba(245,192,24,0.08);border:1px solid rgba(245,192,24,0.3);
-        color:#f5c018;font-family:var(--font-mono);font-size:0.72rem;letter-spacing:0.06em;
-        padding:0.85rem 1.2rem;margin-bottom:1rem;`;
-      banner.innerHTML = `⚠️ BEARISH MARKET (Nifty ${changePct}%) — No stocks passed all 
-        6 strategy conditions today. Wait for a better setup.`;
-      document.getElementById('signals-body').before(banner);
-    }
-    // BULLISH: no banner needed — clean view with best stocks only
-    
-    const deployed = trades.reduce((sum, t) => sum + (t.position || 0), 0);
-
-    document.getElementById('capital-deployed').textContent =
-      `₹${deployed.toLocaleString('en-IN')}`;
-
-    const avgScore = trades.length
-  ? trades.reduce((sum, t) => sum + t.score, 0) / trades.length
-  : 0;
-
-      let strength = "LOW";
-      if (avgScore > 80) strength = "STRONG";
-      else if (avgScore > 65) strength = "MODERATE";
-
-      document.getElementById('signal-strength').textContent = strength;
-      document.getElementById('app-signal-strength').textContent = strength;
-
+    // Market banner
     const container = document.getElementById('signals-body');
-     if(trades.length === 0){
-      container.innerHTML = `
-       <div style="text-align:center;padding:2rem;color:var(--gold)">
-        No high-quality trades today — wait for better setup
-       </div>
-      `;
-     } else {
-  //max score
-        const maxScore = Math.max(...trades.map(x => x.score));
-        container.innerHTML = trades.map((t) => {
-         let signal = t.action || "SKIP";
-         let color = "#888";
+    const isBearish = data.market_trend === 'DOWN';
+    const isCrash   = data.is_crash;
+    let bannerHtml  = '';
+    if(isCrash){
+      bannerHtml = `<div style="background:rgba(255,69,96,0.1);border:1px solid rgba(255,69,96,0.4);color:#ff4560;font-family:var(--font-mono);font-size:0.72rem;padding:0.85rem 1.2rem;margin-bottom:1rem;border-radius:6px">
+        🚨 EXTREME CRASH — Nifty ${data.change_pct}% today. No long trades. Short signals may be high probability.
+      </div>`;
+    } else if(isBearish){
+      bannerHtml = `<div style="background:rgba(245,192,24,0.06);border:1px solid rgba(245,192,24,0.25);color:#f5c018;font-family:var(--font-mono);font-size:0.72rem;padding:0.85rem 1.2rem;margin-bottom:1rem;border-radius:6px">
+        ⚠ BEARISH MARKET (Nifty ${data.change_pct}%) — Long positions reduced to 50% size. Short signals are primary opportunity today.
+      </div>`;
+    }
 
-        if (t.score >= 80) {
-          signal = "BUY";
-          color = "#00FF00";
-          } 
-        else if (t.score >= 65) {
-           signal = "WATCH";
-            color = "#FFD700";
-          }
+    // Render all 5 sections
+    container.innerHTML = bannerHtml +
+      `<div id="section-long" style="margin-bottom:1.25rem"></div>
+       <div id="section-pre-bo" style="margin-bottom:1.25rem"></div>
+       <div id="section-short" style="margin-bottom:1.25rem"></div>
+       <div id="section-pre-bd" style="margin-bottom:1.25rem"></div>
+       <div id="section-rs" style="margin-bottom:1.25rem"></div>`;
 
-        if (t.score === maxScore) {
-          signal = "🔥 BEST";
-          color = "#00E5C8";
-          }
-         const rr = (t.entry && t.sl && t.entry !== t.sl)
-          ? ((t.target - t.entry) / (t.entry - t.sl)).toFixed(2)
-          : "—";
+    // Long signals
+    renderSection('section-long', '▲', 'LONG SIGNALS', '#1ddd8a',
+      (data.long_signals||[]).map(t => renderLongRow(t, isBearish)),
+      isCrash ? 'Crash mode — no long trades today' : 'No long signals today',
+      'exportCSV()');
 
-      // Badge colours
-      const badgeBg    = signal === "🔥 BEST" ? "var(--cyan)"  : signal === "BUY" ? "var(--green)" : "var(--gold)";
-      const badgeColor = signal === "🔥 BEST" ? "var(--black)" : "var(--black)";
+    // Pre-breakout
+    renderSection('section-pre-bo', '⏳', 'PRE-BREAKOUT — SET BUY STOP TONIGHT', '#6c8ebf',
+      (data.pre_breakout||[]).map(t => renderLongRow(t, isBearish)),
+      'No stocks near breakout today',
+      'exportCSV()');
 
-      // Desktop row (hidden on mobile via CSS)
-      const desktopRow = `
-        <div class="app-row"> 
-          <div class="ar-stock"
-            onclick="showChart('${t.stock}')"
-            onmouseenter="hoverStart(event, '${t.stock}')"
-            onmousemove="hoverMove(event)"
-            onmouseleave="hoverEnd()">
-            ${t.stock}
-          </div>
-          <div class="ar-score" style="color:${color}">${t.score}</div>
-          <div class="ar-val">₹${Number(t.entry).toLocaleString('en-IN')}</div>
-          <div class="ar-val" style="color:var(--red)">₹${Number(t.sl).toLocaleString('en-IN')}</div>
-          <div class="ar-val" style="color:var(--green)">₹${Number(t.target).toLocaleString('en-IN')}</div>
-          <div class="ar-val">${rr}</div>
-          <div class="ar-val">${t.qty} ${t.qty === 1 ? 'share' : 'shares'}
-            ${t.caution ? '<span style="color:#f5c018;font-size:0.6rem;margin-left:4px" title="Bearish market — reduced size">½</span>' : ''}
-            ${t.near_52w_high ? '<span style="color:#00E5C8;font-size:0.6rem;margin-left:4px" title="Near 52-week high — strong trend">★</span>' : ''}
-          </div>
-          <div class="ar-val">₹${Number(t.position).toLocaleString('en-IN')}</div>
-          <div class="ar-val">
-            <button class="ar-btn" onclick="event.stopPropagation();showTrade('${t.stock}', ${t.entry}, ${t.sl}, ${t.target}, ${t.qty})">
-              ${signal}
-            </button>
-          </div>
-        </div>`;
+    // Short signals
+    renderSection('section-short', '▼', 'SHORT SIGNALS', '#ff4560',
+      (data.short_signals||[]).map(t => renderShortRow(t)),
+      'No short signals today',
+      'exportCSV()');
 
-      // Mobile card (shown only on mobile via CSS)
-      const mobileCard = `
-        <div class="mobile-signal-card">
-          <div class="msc-header">
-            <div>
-              <div class="msc-stock">${t.stock}</div>
-              <div style="font-family:var(--font-mono);font-size:0.68rem;color:#5a7a96;margin-top:4px;display:flex;gap:0.5rem;flex-wrap:wrap">
-                <span>Score <span style="color:${color};font-weight:600">${t.score}</span></span>
-                ${t.near_52w_high ? '<span style="color:#00e5c8">★ 52W High</span>' : ''}
-                ${t.caution ? '<span style="color:#f5c018">½ Bearish Size</span>' : ''}
-              </div>
-            </div>
-            <span class="msc-badge" style="background:${badgeBg};color:${badgeColor}">${signal}</span>
-          </div>
+    // Pre-breakdown
+    renderSection('section-pre-bd', '⏳', 'PRE-BREAKDOWN — SET SELL STOP TONIGHT', '#c0392b',
+      (data.pre_breakdown||[]).map(t => renderShortRow(t)),
+      'No stocks near breakdown today',
+      'exportCSV()');
 
-          <div class="msc-grid">
-            <div class="msc-item">
-              <div class="msc-label">Entry</div>
-              <div class="msc-value">₹${Number(t.entry).toLocaleString('en-IN')}</div>
-            </div>
-            <div class="msc-item">
-              <div class="msc-label">Stop Loss</div>
-              <div class="msc-value" style="color:var(--red)">₹${Number(t.sl).toLocaleString('en-IN')}</div>
-            </div>
-            <div class="msc-item">
-              <div class="msc-label">Target</div>
-              <div class="msc-value" style="color:var(--green)">₹${Number(t.target).toLocaleString('en-IN')}</div>
-            </div>
-            <div class="msc-item">
-              <div class="msc-label">R:R Ratio</div>
-              <div class="msc-value">${rr}</div>
-            </div>
-            <div class="msc-item">
-              <div class="msc-label">Quantity</div>
-              <div class="msc-value">${t.qty} ${t.qty === 1 ? 'share' : 'shares'}</div>
-            </div>
-            <div class="msc-item">
-              <div class="msc-label">Position</div>
-              <div class="msc-value">₹${Number(t.position).toLocaleString('en-IN')}</div>
-            </div>
-          </div>
+    // Relative strength
+    renderRS(data.relative_strength || []);
 
-          <div class="msc-footer">
-            <div class="msc-score-bar">
-              <span class="msc-score-num" style="color:var(--muted)">Upside</span>
-              <span class="msc-score-num" style="color:var(--green)">+${t.upside_pct}%</span>
-            </div>
-            <button class="msc-action-btn"
-              style="background:${badgeBg};color:${badgeColor}"
-              onclick="showTrade('${t.stock}', ${t.entry}, ${t.sl}, ${t.target}, ${t.qty})">
-              View Trade Plan
-            </button>
-          </div>
-        </div>`;
+    window._masterScanData = data;  // store for CSV export
 
-      return desktopRow + mobileCard;
-  }).join('');
-}
   } catch(err){
-  console.error(err);
-    alert("❌ Server error — check backend or API");
-  document.getElementById('signals-body').innerHTML = `
-    <div style="text-align:center;color:var(--red);padding:2rem">
-      Server error — try again
-    </div>
-  `;
-  }
-  finally{
-    clearInterval(timerInterval);   // stop the timer
+    console.error(err);
+    const isWakeUp = err.name==='TypeError' || err.message?.includes('fetch');
+    document.getElementById('signals-body').innerHTML = `
+      <div style="text-align:center;color:#ff4560;padding:2rem;font-family:var(--font-mono);font-size:0.8rem">
+        ${isWakeUp ? '⏳ Server waking up — wait 30s and try again' : '❌ Server error — check backend'}
+      </div>`;
+  } finally{
+    clearInterval(timerInterval);
     const totalTime = ((Date.now() - scanStart) / 1000).toFixed(1);
     loader.classList.remove('show');
-    label.textContent = `▶ Run Scanner  (last scan: ${totalTime}s)`;
+    label.textContent = `▶ Run Scanner  (last: ${totalTime}s)`;
     btn.disabled = false;
   }
 }
@@ -1444,31 +1442,27 @@ async function loadMarket(){
 // SHOW CHART FUNCTION
 function showChart(stock){
   const container = document.getElementById('chart-container');
-  if(!container) return;
-    if(typeof TradingView === "undefined"){
-    container.innerHTML = "⚠️ Chart library not loaded";
-    return;
-  }
-  document.getElementById('chart-modal').style.display = 'flex';
-  const chartId = 'tv_chart_' + Date.now();
-  container.innerHTML = `<div id="${chartId}"></div>`; 
-  setTimeout(() => {
-    try {
-      new TradingView.widget({
-        width: "100%",
-        height: 600,
-        symbol: `NSE:${stock}`,
-        interval: "D",
-        timezone: "Asia/Kolkata",
-        theme: "dark",
-        style: "1",
-        locale: "en",
-        container_id: chartId
-      });
-    } catch {
-      container.innerHTML = "⚠️ Chart not available";
-    }
-  }, 100);
+  const modal     = document.getElementById('chart-modal');
+  if(!container || !modal) return;
+
+  // Update modal title
+  const title = document.getElementById('chart-modal-title');
+  if(title) title.textContent = `${stock} — Daily Chart`;
+
+  modal.style.display = 'flex';
+
+  // Use TradingView iframe embed — more reliable than widget API for NSE symbols
+  // Widget API sometimes defaults to AAPL when NSE symbol takes time to resolve
+  const symbol = `NSE%3A${stock}`;   // URL encode NSE:STOCK
+  container.innerHTML = `
+    <iframe
+      src="https://www.tradingview.com/chart/?symbol=${symbol}&interval=D&theme=dark&style=1&timezone=Asia%2FKolkata&hide_top_toolbar=0&hide_legend=0&save_image=0"
+      style="width:100%;height:580px;border:none;border-radius:4px;"
+      allowtransparency="true"
+      scrolling="no"
+      frameborder="0"
+    ></iframe>
+  `;
 }
 
 // ─── CLOSE CHART ───
