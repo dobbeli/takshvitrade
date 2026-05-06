@@ -1293,25 +1293,25 @@ div.innerHTML = `
        <div id="section-rs" style="margin-bottom:1.25rem"></div>`;
 
     // Long signals
-    renderSection('section-long', '▲', 'LONG SIGNALS', '#1ddd8a',
+    renderSection('section-long', '▲', 'LONG SIGNALS', '#1ddd8a', '#1ddd8a',
       (data.long_signals||[]).map(t => renderLongRow(t, isBearish)),
       isCrash ? 'Crash mode — no long trades today' : 'No long signals today',
       'exportCSV()');
 
     // Pre-breakout
-    renderSection('section-pre-bo', '⏳', 'PRE-BREAKOUT — SET BUY STOP TONIGHT', '#6c8ebf',
+    renderSection('section-pre-bo', '⏳', 'PRE-BREAKOUT — SET BUY STOP TONIGHT', '#6c8ebf', '#6c8ebf',
       (data.pre_breakout||[]).map(t => renderLongRow(t, isBearish)),
       'No stocks near breakout today',
       'exportCSV()');
 
     // Short signals
-    renderSection('section-short', '▼', 'SHORT SIGNALS', '#ff4560',
+    renderSection('section-short', '▼', 'SHORT SIGNALS', '#ff4560', '#ff4560',
       (data.short_signals||[]).map(t => renderShortRow(t)),
       'No short signals today',
       'exportCSV()');
 
     // Pre-breakdown
-    renderSection('section-pre-bd', '⏳', 'PRE-BREAKDOWN — SET SELL STOP TONIGHT', '#c0392b',
+    renderSection('section-pre-bd', '⏳', 'PRE-BREAKDOWN — SET SELL STOP TONIGHT', '#c0392b', '#c0392b',
       (data.pre_breakdown||[]).map(t => renderShortRow(t)),
       'No stocks near breakdown today',
       'exportCSV()');
@@ -1322,11 +1322,17 @@ div.innerHTML = `
     window._masterScanData = data;  // store for CSV export
 
   } catch(err){
-    console.error(err);
-    const isWakeUp = err.name==='TypeError' || err.message?.includes('fetch');
+    console.error('Scan error:', err);
+    // Only show "waking up" for actual network/fetch errors
+    // Not for JS rendering bugs
+    const isNetworkError = err.name==='TypeError' && err.message?.includes('fetch');
+    const isTimeoutError = err.message?.includes('timeout') || err.message?.includes('abort');
     document.getElementById('signals-body').innerHTML = `
-      <div style="text-align:center;color:#ff4560;padding:2rem;font-family:var(--font-mono);font-size:0.8rem">
-        ${isWakeUp ? '⏳ Server waking up — wait 30s and try again' : '❌ Server error — check backend'}
+      <div style="text-align:center;padding:2rem;font-family:var(--font-mono);font-size:0.8rem">
+        ${isNetworkError || isTimeoutError
+          ? `<span style="color:#f5c018">⏳ Server waking up — wait 30s and try again</span>`
+          : `<span style="color:#ff4560">❌ Render error: ${err.message} — check console (F12)</span>`
+        }
       </div>`;
   } finally{
     clearInterval(timerInterval);
@@ -1489,34 +1495,24 @@ function showHoverChart(e, stock){
 
   if(currentStock === stock){
     container.style.display = 'block';
+    hoverMove(e);
     return;
   }
 
   currentStock = stock;
-
-  container.innerHTML = "Loading chart...";
   container.style.display = 'block';
 
-  const chartId = 'hover_tv_' + Date.now();
-
-  container.innerHTML = `<div id="${chartId}" style="width:100%;height:100%"></div>`;
-
-  setTimeout(() => {
-    try{
-      new TradingView.widget({
-        width: "100%",
-        height: 250,
-        symbol: `NSE:${stock}`,
-        interval: "D",
-        theme: "dark",
-        style: "1",
-        container_id: chartId
-      });
-    } catch (err){
-      console.error(err);
-      container.innerHTML = "Chart error";
-    }
-  }, 100);
+  // FIX: Use iframe instead of TradingView widget
+  // Widget API defaults to AAPL when NSE symbol resolution is slow
+  const symbol = `NSE%3A${stock}`;
+  container.innerHTML = `
+    <iframe
+      src="https://www.tradingview.com/chart/?symbol=${symbol}&interval=D&theme=dark&style=1&timezone=Asia%2FKolkata&hide_top_toolbar=1&hide_legend=1&save_image=0&hide_side_toolbar=1"
+      style="width:100%;height:100%;border:none;"
+      allowtransparency="true"
+      scrolling="no"
+      frameborder="0"
+    ></iframe>`;
 
   hoverMove(e);
 }
