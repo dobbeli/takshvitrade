@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Takshvi Trade — NSE Signal Intelligence</title>
-<script src="https://s3.tradingview.com/tv.js"></script>
+<!-- TradingView charts open in new tab via links — no iframe needed -->
 <meta name="description" content="ATR-based swing signals, multi-factor scoring, and trade order sheets for Indian retail traders."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
@@ -1197,7 +1197,7 @@ div.innerHTML = `
                       <div style="background:#1ddd8a;height:5px;border-radius:3px;width:${barW}%"></div>
                     </div>
                   </div>
-                  <span style="font-family:var(--font-mono);font-size:0.65rem;padding:3px 8px;border-radius:3px;background:#00e5c810;color:#00e5c8;border:1px solid #00e5c830;text-align:center;cursor:pointer">WATCH</span>
+                  <span onclick="showChart('${s.stock}')" style="font-family:var(--font-mono);font-size:0.65rem;padding:3px 8px;border-radius:3px;background:#00e5c810;color:#00e5c8;border:1px solid #00e5c830;text-align:center;cursor:pointer">WATCH</span>
                 </div>`;
             }).join('')
         }
@@ -1345,31 +1345,167 @@ div.innerHTML = `
 
 /* ─── GENERIC TRADE FUNCTION (BROKER NEUTRAL) ─── */
 function showTrade(stock, entry, sl, target, qty){
-  const risk = Math.abs((entry - sl) * qty).toFixed(0);
-  const upside = (((target - entry) / entry) * 100).toFixed(1);
+  const risk        = Math.abs((entry - sl) * qty).toFixed(0);
+  const reward      = Math.abs((target - entry) * qty).toFixed(0);
+  const upside      = (((target - entry) / entry) * 100).toFixed(1);
+  const isShort     = target < entry;
+  const actionColor = isShort ? '#ff4560' : '#00e5c8';
+  const actionLabel = isShort ? 'SHORT' : 'LONG';
 
-  alert(`
-📊 TRADE PLAN
-Stock: ${stock}
-Entry: ₹${entry}
-Stop Loss: ₹${sl}
-Target: ₹${target}
-Quantity: ${qty}
-Risk: ₹${risk}
-Reward Ratio: 1:2
-Upside: ${upside}%
+  // Broker deep links — NSE stock symbol
+  const brokers = [
+    {
+      name: 'Zerodha Kite',
+      icon: '🟠',
+      color: '#387ed1',
+      url: `https://kite.zerodha.com/chart/ext/ciq/NSE/${stock}/1D`,
+      desc: 'Most popular · lowest brokerage'
+    },
+    {
+      name: 'Groww',
+      icon: '🟢',
+      color: '#5367ff',
+      url: `https://groww.in/stocks/${stock.toLowerCase()}`,
+      desc: 'Best for beginners'
+    },
+    {
+      name: 'Angel One',
+      icon: '🔵',
+      color: '#e8841a',
+      url: `https://www.angelone.in/trade/stocks/${stock.toLowerCase()}-share-price`,
+      desc: 'Free delivery trades'
+    },
+    {
+      name: 'Upstox',
+      icon: '🟣',
+      color: '#7b61ff',
+      url: `https://upstox.com/stocks/${stock.toLowerCase()}/`,
+      desc: 'Fast execution'
+    },
+  ];
 
-👉 Use ANY broker:
-- Zerodha
-- Groww
-- Angel One
-- Upstox
+  // Remove existing modal if present
+  const existing = document.getElementById('trade-plan-modal');
+  if(existing) existing.remove();
 
-Rules:
-• Enter above entry price
-• Set SL immediately
-• Avoid gap-up > 2%
-  `);
+  const modal = document.createElement('div');
+  modal.id = 'trade-plan-modal';
+  modal.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;
+    display:flex;align-items:center;justify-content:center;padding:1rem;
+  `;
+
+  modal.innerHTML = `
+    <div style="
+      background:#0d1117;border:1px solid #1e2836;border-radius:12px;
+      width:100%;max-width:480px;max-height:90vh;overflow-y:auto;
+    ">
+      <!-- Header -->
+      <div style="
+        padding:1.25rem 1.5rem;border-bottom:1px solid #181f28;
+        display:flex;justify-content:space-between;align-items:center;
+      ">
+        <div>
+          <div style="font-family:var(--font-display);font-size:1.4rem;font-weight:800;color:#e8f0f8">
+            ${stock}
+          </div>
+          <div style="font-family:var(--font-mono);font-size:0.65rem;letter-spacing:0.12em;
+                      text-transform:uppercase;color:${actionColor};margin-top:3px">
+            ${actionLabel} · Trade Plan
+          </div>
+        </div>
+        <button onclick="document.getElementById('trade-plan-modal').remove()"
+          style="background:#181f28;border:1px solid #1e2836;color:#5a7a96;
+                 padding:6px 12px;border-radius:6px;cursor:pointer;font-size:0.9rem">
+          ✕
+        </button>
+      </div>
+
+      <!-- Trade levels -->
+      <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #181f28">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.6rem;margin-bottom:1rem">
+          <div style="background:#080b0e;border:1px solid #181f28;border-radius:7px;padding:0.75rem">
+            <div style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Entry</div>
+            <div style="font-family:var(--font-mono);font-size:1rem;font-weight:600;color:#e8f0f8">₹${Number(entry).toLocaleString('en-IN')}</div>
+          </div>
+          <div style="background:#080b0e;border:1px solid rgba(255,69,96,0.3);border-radius:7px;padding:0.75rem">
+            <div style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Stop Loss</div>
+            <div style="font-family:var(--font-mono);font-size:1rem;font-weight:600;color:#ff4560">₹${Number(sl).toLocaleString('en-IN')}</div>
+          </div>
+          <div style="background:#080b0e;border:1px solid rgba(29,221,138,0.3);border-radius:7px;padding:0.75rem">
+            <div style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Target</div>
+            <div style="font-family:var(--font-mono);font-size:1rem;font-weight:600;color:#1ddd8a">₹${Number(target).toLocaleString('en-IN')}</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0.5rem">
+          <div style="background:#080b0e;border-radius:6px;padding:0.6rem;text-align:center">
+            <div style="font-family:var(--font-mono);font-size:0.55rem;color:#3d5068;text-transform:uppercase;margin-bottom:3px">Qty</div>
+            <div style="font-family:var(--font-mono);font-size:0.85rem;color:#e8f0f8;font-weight:500">${qty}</div>
+          </div>
+          <div style="background:#080b0e;border-radius:6px;padding:0.6rem;text-align:center">
+            <div style="font-family:var(--font-mono);font-size:0.55rem;color:#3d5068;text-transform:uppercase;margin-bottom:3px">Risk</div>
+            <div style="font-family:var(--font-mono);font-size:0.85rem;color:#ff4560;font-weight:500">₹${risk}</div>
+          </div>
+          <div style="background:#080b0e;border-radius:6px;padding:0.6rem;text-align:center">
+            <div style="font-family:var(--font-mono);font-size:0.55rem;color:#3d5068;text-transform:uppercase;margin-bottom:3px">Reward</div>
+            <div style="font-family:var(--font-mono);font-size:0.85rem;color:#1ddd8a;font-weight:500">₹${reward}</div>
+          </div>
+          <div style="background:#080b0e;border-radius:6px;padding:0.6rem;text-align:center">
+            <div style="font-family:var(--font-mono);font-size:0.55rem;color:#3d5068;text-transform:uppercase;margin-bottom:3px">Upside</div>
+            <div style="font-family:var(--font-mono);font-size:0.85rem;color:#00e5c8;font-weight:500">${upside}%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rules -->
+      <div style="padding:1rem 1.5rem;border-bottom:1px solid #181f28">
+        <div style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:0.6rem">Trading Rules</div>
+        <div style="font-family:var(--font-mono);font-size:0.72rem;color:#5a7a96;line-height:1.9">
+          ${isShort ? `
+            ▸ Enter SHORT below ₹${Number(entry).toLocaleString('en-IN')}<br>
+            ▸ Set SL at ₹${Number(sl).toLocaleString('en-IN')} immediately after entry<br>
+            ▸ Target ₹${Number(target).toLocaleString('en-IN')} — exit fully or trail<br>
+            ▸ Only for F&O / intraday in cash segment
+          ` : `
+            ▸ Enter ONLY if stock trades above ₹${Number(entry).toLocaleString('en-IN')}<br>
+            ▸ Set SL at ₹${Number(sl).toLocaleString('en-IN')} immediately after entry<br>
+            ▸ Target ₹${Number(target).toLocaleString('en-IN')} — exit fully<br>
+            ▸ Avoid if gap-up is more than 2% above entry
+          `}
+        </div>
+      </div>
+
+      <!-- Broker links -->
+      <div style="padding:1rem 1.5rem">
+        <div style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:0.75rem">Open in your broker</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+          ${brokers.map(b => `
+            <a href="${b.url}" target="_blank" rel="noopener"
+              style="display:flex;align-items:center;gap:0.6rem;padding:0.7rem 0.9rem;
+                     background:#080b0e;border:1px solid #181f28;border-radius:8px;
+                     text-decoration:none;transition:all 0.15s;cursor:pointer"
+              onmouseover="this.style.borderColor='${actionColor}';this.style.background='#0d1117'"
+              onmouseout="this.style.borderColor='#181f28';this.style.background='#080b0e'">
+              <span style="font-size:1.1rem">${b.icon}</span>
+              <div>
+                <div style="font-family:var(--font-mono);font-size:0.72rem;font-weight:600;color:#e8f0f8">${b.name}</div>
+                <div style="font-family:var(--font-mono);font-size:0.58rem;color:#3d5068;margin-top:1px">${b.desc}</div>
+              </div>
+              <span style="margin-left:auto;font-size:0.65rem;color:#3d5068">→</span>
+            </a>
+          `).join('')}
+        </div>
+      </div>
+
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  // Close on backdrop click
+  modal.addEventListener('click', (e) => {
+    if(e.target === modal) modal.remove();
+  });
 }
 /* ─── MARKET LIVE DATA (FIXED) ─── */
 async function loadMarket(){
@@ -1446,28 +1582,96 @@ async function loadMarket(){
     val ? `₹${val.toLocaleString('en-IN')}` : '—';
 });
 // SHOW CHART FUNCTION
+// TradingView blocks iframe embedding on non-partner domains
+// Using Screener.in which allows embedding for NSE stocks
 function showChart(stock){
   const container = document.getElementById('chart-container');
   const modal     = document.getElementById('chart-modal');
   if(!container || !modal) return;
 
-  // Update modal title
   const title = document.getElementById('chart-modal-title');
   if(title) title.textContent = `${stock} — Daily Chart`;
 
   modal.style.display = 'flex';
 
-  // Use TradingView iframe embed — more reliable than widget API for NSE symbols
-  // Widget API sometimes defaults to AAPL when NSE symbol takes time to resolve
-  const symbol = `NSE%3A${stock}`;   // URL encode NSE:STOCK
+  // Option 1: Open TradingView in a new tab (most reliable)
+  // Option 2: Show chart links with buttons
   container.innerHTML = `
-    <iframe
-      src="https://www.tradingview.com/chart/?symbol=${symbol}&interval=D&theme=dark&style=1&timezone=Asia%2FKolkata&hide_top_toolbar=0&hide_legend=0&save_image=0"
-      style="width:100%;height:580px;border:none;border-radius:4px;"
-      allowtransparency="true"
-      scrolling="no"
-      frameborder="0"
-    ></iframe>
+    <div style="
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      height:100%;gap:1.5rem;padding:2rem;
+    ">
+      <div style="font-family:var(--font-display);font-size:2rem;font-weight:800;color:#e8f0f8;letter-spacing:0.05em">
+        ${stock}
+      </div>
+      <div style="font-family:var(--font-mono);font-size:0.75rem;color:#5a7a96;letter-spacing:0.1em;text-transform:uppercase">
+        NSE — Daily Chart — Open in your preferred platform
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;width:100%;max-width:520px">
+
+        <a href="https://www.tradingview.com/chart/?symbol=NSE:${stock}" target="_blank"
+          style="display:flex;align-items:center;gap:0.75rem;padding:1rem 1.25rem;
+                 background:#0d1117;border:1px solid #1e2836;border-radius:8px;
+                 text-decoration:none;color:#e8f0f8;font-family:var(--font-mono);
+                 font-size:0.75rem;letter-spacing:0.06em;transition:border-color 0.2s"
+          onmouseover="this.style.borderColor='#00e5c8'"
+          onmouseout="this.style.borderColor='#1e2836'">
+          <span style="font-size:1.2rem">📈</span>
+          <div>
+            <div style="font-weight:600;margin-bottom:2px">TradingView</div>
+            <div style="color:#5a7a96;font-size:0.65rem">Full chart · indicators</div>
+          </div>
+        </a>
+
+        <a href="https://www.screener.in/company/${stock}/consolidated/" target="_blank"
+          style="display:flex;align-items:center;gap:0.75rem;padding:1rem 1.25rem;
+                 background:#0d1117;border:1px solid #1e2836;border-radius:8px;
+                 text-decoration:none;color:#e8f0f8;font-family:var(--font-mono);
+                 font-size:0.75rem;letter-spacing:0.06em;transition:border-color 0.2s"
+          onmouseover="this.style.borderColor='#00e5c8'"
+          onmouseout="this.style.borderColor='#1e2836'">
+          <span style="font-size:1.2rem">📊</span>
+          <div>
+            <div style="font-weight:600;margin-bottom:2px">Screener.in</div>
+            <div style="color:#5a7a96;font-size:0.65rem">Fundamentals · financials</div>
+          </div>
+        </a>
+
+        <a href="https://finance.yahoo.com/quote/${stock}.NS" target="_blank"
+          style="display:flex;align-items:center;gap:0.75rem;padding:1rem 1.25rem;
+                 background:#0d1117;border:1px solid #1e2836;border-radius:8px;
+                 text-decoration:none;color:#e8f0f8;font-family:var(--font-mono);
+                 font-size:0.75rem;letter-spacing:0.06em;transition:border-color 0.2s"
+          onmouseover="this.style.borderColor='#00e5c8'"
+          onmouseout="this.style.borderColor='#1e2836'">
+          <span style="font-size:1.2rem">💹</span>
+          <div>
+            <div style="font-weight:600;margin-bottom:2px">Yahoo Finance</div>
+            <div style="color:#5a7a96;font-size:0.65rem">Price data · news</div>
+          </div>
+        </a>
+
+        <a href="https://www.moneycontrol.com/india/stockpricequote/${stock.toLowerCase()}/" target="_blank"
+          style="display:flex;align-items:center;gap:0.75rem;padding:1rem 1.25rem;
+                 background:#0d1117;border:1px solid #1e2836;border-radius:8px;
+                 text-decoration:none;color:#e8f0f8;font-family:var(--font-mono);
+                 font-size:0.75rem;letter-spacing:0.06em;transition:border-color 0.2s"
+          onmouseover="this.style.borderColor='#00e5c8'"
+          onmouseout="this.style.borderColor='#1e2836'">
+          <span style="font-size:1.2rem">📰</span>
+          <div>
+            <div style="font-weight:600;margin-bottom:2px">Moneycontrol</div>
+            <div style="color:#5a7a96;font-size:0.65rem">News · analyst ratings</div>
+          </div>
+        </a>
+
+      </div>
+
+      <div style="font-family:var(--font-mono);font-size:0.65rem;color:#3d5068;text-align:center;margin-top:0.5rem">
+        Click any link above to open the chart in a new tab
+      </div>
+    </div>
   `;
 }
 
@@ -1493,26 +1697,35 @@ function showHoverChart(e, stock){
   const container = document.getElementById('hover-chart');
   if(!container) return;
 
-  if(currentStock === stock){
-    container.style.display = 'block';
-    hoverMove(e);
-    return;
-  }
-
   currentStock = stock;
   container.style.display = 'block';
 
-  // FIX: Use iframe instead of TradingView widget
-  // Widget API defaults to AAPL when NSE symbol resolution is slow
-  const symbol = `NSE%3A${stock}`;
+  // Show clean stock info card instead of broken TradingView iframe
+  // TradingView blocks iframe on non-partner domains
   container.innerHTML = `
-    <iframe
-      src="https://www.tradingview.com/chart/?symbol=${symbol}&interval=D&theme=dark&style=1&timezone=Asia%2FKolkata&hide_top_toolbar=1&hide_legend=1&save_image=0&hide_side_toolbar=1"
-      style="width:100%;height:100%;border:none;"
-      allowtransparency="true"
-      scrolling="no"
-      frameborder="0"
-    ></iframe>`;
+    <div style="padding:1rem;height:100%;display:flex;flex-direction:column;justify-content:space-between">
+      <div style="font-family:var(--font-display);font-size:1.1rem;font-weight:700;color:#e8f0f8">
+        ${stock}
+        <span style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;margin-left:6px">NSE</span>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:0.65rem;color:#5a7a96;margin-top:4px">
+        Click to open chart links
+      </div>
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
+        <a href="https://www.tradingview.com/chart/?symbol=NSE:${stock}" target="_blank"
+          style="font-family:var(--font-mono);font-size:0.65rem;color:#00e5c8;text-decoration:none;
+                 padding:5px 8px;background:#0a0d10;border:1px solid #1e2836;border-radius:4px;
+                 display:block;text-align:center">
+          📈 Open TradingView Chart →
+        </a>
+        <a href="https://www.screener.in/company/${stock}/" target="_blank"
+          style="font-family:var(--font-mono);font-size:0.65rem;color:#5a7a96;text-decoration:none;
+                 padding:5px 8px;background:#0a0d10;border:1px solid #1e2836;border-radius:4px;
+                 display:block;text-align:center">
+          📊 Screener.in →
+        </a>
+      </div>
+    </div>`;
 
   hoverMove(e);
 }
