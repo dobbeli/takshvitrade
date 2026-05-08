@@ -442,7 +442,11 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 
   <div class="nifty-badge" id="nifty-badge">
     <div class="nifty-dot dot-red" id="nifty-dot"></div>
-    <span class="nifty-text">NIFTY50 <strong id="nifty-price">₹--</strong> · <span id="nifty-verdict">BEARISH — market caution</span></span>
+    <span class="nifty-text">
+      NIFTY50
+      <strong id="nifty-price" style="margin-left:4px">--</strong>
+      <span id="nifty-verdict" style="margin-left:6px;font-size:0.85em"></span>
+    </span>
   </div>
 
   <div class="eyebrow">NSE Swing Signal Intelligence · takshvitrade.com</div>
@@ -854,7 +858,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 
 <script>
 /* ─── Cursor ─── */
-const API = "https://takshvitrade-api.onrender.com";
+const API = "http://127.0.0.1:8000";
 
 const cur = document.getElementById('cursor');
 const ring = document.getElementById('cursor-ring');
@@ -1237,11 +1241,24 @@ div.innerHTML = `
     if(!res.ok) throw new Error("API failed");
     const data = await res.json();
 
-    // Update market cards
-    const niftyFmt = data.nifty ? `₹${Number(data.nifty).toLocaleString('en-IN')}` : '₹--';
-    ['nifty-price','dashboard-nifty-price','app-nifty-price'].forEach(id => {
-      const el = document.getElementById(id); if(el) el.textContent = niftyFmt;
-    });
+    // Update market cards — Google Finance format
+    if(data.nifty != null){
+      const priceFormatted = Number(data.nifty).toLocaleString('en-IN', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+      }) + ' INR';
+
+      // Point change from scan data
+      const niftyPriceEl = document.getElementById('nifty-price');
+      if(niftyPriceEl) niftyPriceEl.textContent = priceFormatted;
+
+      const dashNiftyEl = document.getElementById('dashboard-nifty-price');
+      if(dashNiftyEl) dashNiftyEl.textContent = Number(data.nifty).toLocaleString('en-IN', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+      });
+
+      const appNiftyEl = document.getElementById('app-nifty-price');
+      if(appNiftyEl) appNiftyEl.textContent = priceFormatted;
+    }
     if(data.market_trend){
       const trend = data.market_trend;
       const color = trend==='UP' ? '#1ddd8a' : '#ff4560';
@@ -1253,6 +1270,22 @@ div.innerHTML = `
       if(dot){ dot.classList.remove('dot-red','dot-green'); dot.classList.add(trend==='UP'?'dot-green':'dot-red'); }
       const sub = document.getElementById('market-sub');
       if(sub) sub.textContent = trend==='UP' ? 'Bullish market' : 'Bearish market';
+
+      // Update nifty-change with Google Finance style point change
+      if(data.change_pct != null && data.nifty != null){
+        const arrow = trend === 'UP' ? '▲' : '▼';
+        const chgEl = document.getElementById('nifty-change');
+        if(chgEl){
+          chgEl.textContent = `${arrow} ${Math.abs(data.change_pct).toFixed(2)}% today`;
+          chgEl.style.color = color;
+        }
+        // Update verdict on hero badge too
+        const verdictEl = document.getElementById('nifty-verdict');
+        if(verdictEl){
+          verdictEl.textContent = `${arrow} ${Math.abs(data.change_pct).toFixed(2)}% today`;
+          verdictEl.style.color = color;
+        }
+      }
     }
 
     // Total signals count
@@ -1507,29 +1540,52 @@ function showTrade(stock, entry, sl, target, qty){
     if(e.target === modal) modal.remove();
   });
 }
-/* ─── MARKET LIVE DATA (FIXED) ─── */
+/* ─── MARKET LIVE DATA ─── */
+function round2(n){ return Math.round(n * 100) / 100; }
+
 async function loadMarket(){
   try{
-    // FIX 1: Was calling /market (wrong) — now calls /api/market/nifty (real data endpoint)
     const res = await fetch(`${API}/api/market/nifty`);
     const data = await res.json();
 
-    // FIX 1: NULL GUARD — never show ₹undefined when price is null
-    const price  = (data.price != null) ? `₹${Number(data.price).toLocaleString('en-IN')}` : '₹--';
-    const trend  = data.trend  || 'SIDEWAYS';
-    const verdict= data.verdict|| 'SIDEWAYS — neutral market';
-    const color  = trend === "UP" ? "lime" : trend === "DOWN" ? "#ff4560" : "#f5c018";
-    const changeSign = trend === "UP" ? "▲" : trend === "DOWN" ? "▼" : "—";
-    const changeTxt  = (data.change != null) ? `${changeSign} ${Math.abs(data.change)}%` : changeSign;
+    const trend = data.trend || 'SIDEWAYS';
+    const color = trend === "UP" ? "#1ddd8a" : trend === "DOWN" ? "#ff4560" : "#f5c018";
 
-    // HERO badge — never undefined again
-    document.getElementById('nifty-price').textContent = price;
-    document.getElementById('nifty-verdict').textContent = verdict;
+    // ── Format exactly like Google Finance ───────────────────
+    // Example: 24,181.30 INR ▼ -145.35 (-0.60%) today
+    let priceText  = '--';
+    let changeText = '';
 
-    // DASHBOARD preview section
+    if(data.price != null){
+      priceText = Number(data.price).toLocaleString('en-IN', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+      }) + ' INR';
+
+      if(data.prev != null && data.change != null){
+        const pointChange = round2(data.price - data.prev);
+        const arrow = trend === "UP" ? "▲" : trend === "DOWN" ? "▼" : "—";
+        const sign  = pointChange >= 0 ? "+" : "";
+        changeText  = `${arrow} ${sign}${pointChange.toFixed(2)} (${Math.abs(data.change).toFixed(2)}%) today`;
+      }
+    }
+
+    // ── HERO badge ─────────────────────────────────────────
+    const priceEl = document.getElementById('nifty-price');
+    if(priceEl) priceEl.textContent = priceText;
+
+    const verdictEl = document.getElementById('nifty-verdict');
+    if(verdictEl){ verdictEl.textContent = changeText; verdictEl.style.color = color; }
+
+    // ── DASHBOARD mini card ─────────────────────────────────
     const dashNifty = document.getElementById('dashboard-nifty-price');
-    if(dashNifty) dashNifty.textContent = price;
+    if(dashNifty) dashNifty.textContent = data.price
+      ? Number(data.price).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})
+      : '--';
 
+    const niftyChg = document.getElementById('nifty-change');
+    if(niftyChg){ niftyChg.textContent = changeText; niftyChg.style.color = color; }
+
+    // ── Market status ───────────────────────────────────────
     const marketStatus = document.getElementById('market-status');
     if(marketStatus) marketStatus.textContent = trend;
 
@@ -1537,36 +1593,33 @@ async function loadMarket(){
     if(marketSub) marketSub.textContent =
       trend === "UP" ? "Bullish market" : trend === "DOWN" ? "Bearish market" : "Sideways";
 
-    // Dot colour
     const dot = document.getElementById('nifty-dot');
-    dot.classList.remove('dot-red','dot-green');
-    dot.classList.add(trend === "UP" ? 'dot-green' : 'dot-red');
+    if(dot){
+      dot.classList.remove('dot-red','dot-green');
+      dot.classList.add(trend === "UP" ? 'dot-green' : 'dot-red');
+    }
 
-    // Nifty change line
-    const niftyChg = document.getElementById('nifty-change');
-    if(niftyChg){ niftyChg.textContent = changeTxt; niftyChg.style.color = color; }
-
-    // Market tab cards
     const appNiftyPrice = document.getElementById('app-nifty-price');
-    if(appNiftyPrice) appNiftyPrice.textContent = price;
+    if(appNiftyPrice) appNiftyPrice.textContent = data.price
+      ? `${Number(data.price).toLocaleString('en-IN')} INR` : '--';
 
     const appTrend = document.getElementById('app-market-trend');
     if(appTrend){ appTrend.textContent = trend; appTrend.style.color = color; }
 
-    // Dashboard market trend row
     const trendEl = document.getElementById('market-trend');
     if(trendEl){ trendEl.textContent = trend; trendEl.style.color = color; }
 
     const mNote = document.getElementById('market-note');
-    if(mNote) mNote.textContent = trend === "UP" ? "Bullish momentum" : trend === "DOWN" ? "Bearish pressure" : "Sideways momentum";
+    if(mNote) mNote.textContent =
+      trend === "UP" ? "Bullish momentum" : trend === "DOWN" ? "Bearish pressure" : "Sideways momentum";
 
-    // Store trend globally for news recommendation
     window._marketTrend = trend;
 
   }catch(err){
-    // Graceful fallback — never crash, never show undefined
-    document.getElementById('nifty-price').textContent = '₹--';
-    document.getElementById('nifty-verdict').textContent = 'MARKET — data unavailable';
+    const priceEl = document.getElementById('nifty-price');
+    if(priceEl) priceEl.textContent = '--';
+    const verdictEl = document.getElementById('nifty-verdict');
+    if(verdictEl) verdictEl.textContent = 'MARKET — data unavailable';
     window._marketTrend = 'SIDEWAYS';
     console.warn("Market fetch failed:", err);
   }
