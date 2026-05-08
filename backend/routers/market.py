@@ -1,9 +1,14 @@
-"""Market Router — /api/market (FIXED for cloud deployment)"""
+"""Market Router — /api/market"""
 from fastapi import APIRouter
 import requests
-import pandas as pd
+import logging
 
 router = APIRouter()
+
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json",
+}
 
 @router.get("/status")
 def market_status():
@@ -13,65 +18,46 @@ def market_status():
 @router.get("/nifty")
 def nifty_price():
     """
-    Uses direct Yahoo Finance API instead of yfinance library.
-    yfinance fails on cloud servers (Render) — direct requests work.
+    Returns Nifty50 price, prev close, point change, % change.
+    Uses direct requests (not yfinance) — works reliably on Render cloud.
+    Returns prev so frontend can calculate exact point change.
     """
     try:
-        url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=5d&interval=1d"
-        
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Accept": "application/json",
-        }
-
-        res = requests.get(url, headers=headers, timeout=10)
-
-        if res.status_code != 200:
-            # Try query2 as fallback
-            url2 = "https://query2.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=5d&interval=1d"
-            res = requests.get(url2, headers=headers, timeout=10)
+        for base in ["https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com"]:
+            try:
+                res = requests.get(
+                    f"{base}/v8/finance/chart/%5ENSEI?range=5d&interval=1d",
+                    headers=HEADERS, timeout=10
+                )
+                if res.status_code == 200:
+                    break
+            except:
+                continue
 
         if res.status_code != 200:
-            return {
-                "price": None, "prev": None, "change": None,
-                "trend": "SIDEWAYS", "bullish": None, "verdict": "DATA UNAVAILABLE"
-            }
+            return {"price": None, "prev": None, "change": None,
+                    "trend": "SIDEWAYS", "bullish": None, "verdict": "DATA UNAVAILABLE"}
 
-        data   = res.json()
-        result = data.get("chart", {}).get("result")
-
-        if not result:
-            return {
-                "price": None, "prev": None, "change": None,
-                "trend": "SIDEWAYS", "bullish": None, "verdict": "DATA UNAVAILABLE"
-            }
-
-        closes = result[0]["indicators"]["quote"][0]["close"]
-        closes = [c for c in closes if c is not None]
-
+        closes = [c for c in res.json()["chart"]["result"][0]["indicators"]["quote"][0]["close"] if c]
         if len(closes) < 2:
-            return {
-                "price": None, "prev": None, "change": None,
-                "trend": "SIDEWAYS", "bullish": None, "verdict": "DATA UNAVAILABLE"
-            }
+            return {"price": None, "prev": None, "change": None,
+                    "trend": "SIDEWAYS", "bullish": None, "verdict": "DATA UNAVAILABLE"}
 
-        latest     = round(closes[-1], 2)
-        prev       = round(closes[-2], 2)
-        change_pct = round(((latest - prev) / prev) * 100, 2)
-        trend      = "UP" if latest > prev else "DOWN"
+        latest = round(closes[-1], 2)
+        prev   = round(closes[-2], 2)
+        change = round(((latest - prev) / prev) * 100, 2)
+        trend  = "UP" if latest > prev else "DOWN"
 
         return {
             "price":   latest,
             "prev":    prev,
-            "change":  change_pct,
+            "change":  change,
             "trend":   trend,
             "bullish": trend == "UP",
             "verdict": "BULLISH — market strength" if trend == "UP" else "BEARISH — market caution"
         }
 
     except Exception as e:
-        return {
-            "price": None, "prev": None, "change": None,
-            "trend": "SIDEWAYS", "bullish": None,
-            "verdict": "DATA UNAVAILABLE"
-        }
+        logging.error(f"Nifty fetch error: {e}")
+        return {"price": None, "prev": None, "change": None,
+                "trend": "SIDEWAYS", "bullish": None, "verdict": "DATA ERROR"}
