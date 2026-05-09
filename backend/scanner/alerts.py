@@ -473,3 +473,27 @@ def send_alerts_for_scan(scan_result: dict, capital: float,
         "total_sent":   len(sent),
         "total_failed": len(failed),
     }
+
+
+# ── Backward compatibility aliases ────────────────────────────
+# Old signals.py imported these names — keep them to avoid ImportError
+def format_signal_message(trades, capital, market):
+    """Legacy alias — formats multiple trades into one message."""
+    if not trades:
+        return "No signals found today."
+    lines = [f"📊 TAKSHVI TRADE SIGNALS\nMarket: {market}\nCapital: ₹{capital:,.0f}\n"]
+    for t in trades[:5]:
+        lines.append(
+            f"📈 {t.get('stock')} | Entry: ₹{t.get('entry')} | "
+            f"SL: ₹{t.get('sl')} | Target: ₹{t.get('target')} | "
+            f"RR: 1:{t.get('rr')} | Score: {t.get('score')}"
+        )
+    lines.append("\n⚠️ Not investment advice. takshvitrade.com")
+    return "\n".join(lines)
+
+
+def send_test_message(to_number: str) -> bool:
+    """Legacy alias for send_whatsapp with test message."""
+    msg    = format_test_message()
+    result = send_whatsapp(msg, to_number)
+    return result["success"]
