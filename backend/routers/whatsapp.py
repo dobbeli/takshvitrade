@@ -22,7 +22,7 @@ def normalize_phone(phone: str) -> str:
 # ════════════════════════════════════════════════════════════
 # TEST ENDPOINT — verify Twilio connection
 # ════════════════════════════════════════════════════════════
-@router.post("/test")
+@router.get("/test")
 def send_test_alert(phone: str = Query(..., description="Your WhatsApp number e.g. 9XXXXXXXXX")):
     """
     Sends a test WhatsApp message to verify Twilio is connected.
