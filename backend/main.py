@@ -20,6 +20,7 @@ from contextlib import asynccontextmanager
 from routers import signals
 from routers import market
 from routers import news
+from routers import whatsapp
 
 # Engine
 from scanner.engine import run_full_scan, get_market_trend  
@@ -61,6 +62,7 @@ app.add_middleware(
 app.include_router(signals.router, prefix="/api/signals")
 app.include_router(market.router, prefix="/api/market")
 app.include_router(news.router, prefix="/api/news")
+app.include_router(whatsapp.router, prefix="/api/whatsapp")
 
 # ===============================
 # BASIC ROUTES
@@ -117,38 +119,26 @@ def get_chart(symbol: str = "INFY.NS"):
 @app.get("/run-scan")
 def run_scan(capital: int = 50000):
     try:
-        market_trend, nifty_value, change_pct = get_market_trend()
+        # ✅ MARKET DATA
+        market_trend, nifty_value = get_market_trend()
+
+        # ✅ SCAN
         results = run_full_scan(capital=capital)
+
         return {
-            "count":        len(results),
-            "data":         results,
+            "count": len(results),
+            "data": results,
             "market_trend": market_trend,
-            "nifty":        nifty_value,
-            "change_pct":   change_pct,
+            "nifty": nifty_value
         }
+
     except Exception as e:
         logging.error(f"Scan error: {e}")
-        return {"count": 0, "data": [], "market_trend": "SIDEWAYS", "nifty": None, "change_pct": None}
-
-
-@app.get("/run-master-scan")
-def master_scan(capital: int = 50000):
-    """
-    Complete next-day trading plan in one call.
-    Returns: long_signals, pre_breakout, short_signals, pre_breakdown, relative_strength
-    """
-    try:
-        from scanner.engine import run_master_scan
-        result = run_master_scan(capital=capital, risk_amount=int(capital * 0.01))
-        return result
-    except Exception as e:
-        logging.error(f"Master scan error: {e}")
         return {
-            "market_trend": "SIDEWAYS", "nifty": None, "change_pct": None,
-            "scan_time": 0, "is_crash": False,
-            "long_signals": [], "pre_breakout": [],
-            "short_signals": [], "pre_breakdown": [],
-            "relative_strength": [],
+            "count": 0,
+            "data": [],
+            "market_trend": "SIDEWAYS",
+            "nifty": None
         }
 
 # ===============================
