@@ -1,0 +1,46 @@
+name: Takshvi Trade — Daily WhatsApp Alerts
+
+on:
+  schedule:
+    - cron: '0 10 * * 1-6'   # 3:30 PM IST every Mon-Sat
+  workflow_dispatch:
+    inputs:
+      capital:
+        description: 'Capital in INR'
+        required: false
+        default: '100000'
+
+jobs:
+  send-alerts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Skip if Sunday
+        id: check
+        run: |
+          DAY=$(date +%u)
+          if [ "$DAY" -eq 7 ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Wake up Render server
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          echo "Pinging Render to wake up..."
+          curl -s "https://takshvitrade-api.onrender.com/health"
+          sleep 15
+          echo "Server ready"
+
+      - name: Send WhatsApp alerts
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          CAPITAL=${{ github.event.inputs.capital || '100000' }}
+          echo "Running scan for ₹${CAPITAL}..."
+
+          curl -s --max-time 300 \
+            "https://takshvitrade-api.onrender.com/api/whatsapp/send?capital=${CAPITAL}"
+
+          echo "Done"
