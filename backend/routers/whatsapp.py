@@ -2,7 +2,7 @@
 Takshvi Trade — WhatsApp Alert Router
 Endpoints for sending and managing WhatsApp alerts
 """
-from fastapi import APIRouter, Query, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Query, HTTPException
 from typing import Optional
 import logging
 
@@ -49,11 +49,10 @@ def send_test_alert(phone: str = Query(..., description="Your WhatsApp number e.
 # ════════════════════════════════════════════════════════════
 # MANUAL ALERT — trigger alerts for latest scan
 # ════════════════════════════════════════════════════════════
-@router.post("/send")
+@router.get("/send")
 def send_scan_alerts(
     capital:    float = Query(100000),
     phone:      Optional[str] = Query(None, description="Override phone number"),
-    background: BackgroundTasks = None
 ):
     """
     Runs master scan and sends WhatsApp alerts.
@@ -97,7 +96,7 @@ def send_scan_alerts(
 # ════════════════════════════════════════════════════════════
 # SINGLE SIGNAL ALERT — send alert for one specific stock
 # ════════════════════════════════════════════════════════════
-@router.post("/send-signal")
+@router.get("/send-signal")
 def send_single_signal_alert(
     phone:       str   = Query(...),
     stock:       str   = Query(...),
