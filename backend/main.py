@@ -1,5 +1,11 @@
 """
-Takshvi Trade — FastAPI Backend
+Takshvi Trade — FastAPI Backend v2.1
+Changes from v2.0:
+- Auto-saves scan results to Supabase after every master scan
+- Auto-logs WhatsApp alerts to alert_logs table
+- /db-status endpoint for health checking Supabase connection
+- /api/history endpoint to retrieve past scans
+- /api/signals/open  endpoint for open trade monitoring
 """
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -19,15 +25,24 @@ from routers import whatsapp
 # Engine
 from scanner.engine import run_full_scan, run_master_scan, get_market_trend
 
+# Database
+from scanner.database import (
+    save_scan, save_signals, get_recent_scans,
+    get_open_signals, get_alert_logs, is_connected
+)
+
 print("✅ All imports successful")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("✅ Takshvi Trade API started")
+    db_ok = is_connected()
+    print(f"✅ Takshvi Trade API started | Supabase: {'✅ connected' if db_ok else '❌ not connected'}")
     yield
     print("🛑 Takshvi Trade API stopped")
 
-app = FastAPI(title="Takshvi Trade API", version="2.0.0", lifespan=lifespan)
+
+app = FastAPI(title="Takshvi Trade API", version="2.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,28 +59,84 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(market.router,    prefix="/api/market")
-app.include_router(news.router,      prefix="/api/news")
-app.include_router(whatsapp.router,  prefix="/api/whatsapp")
+app.include_router(market.router,   prefix="/api/market")
+app.include_router(news.router,     prefix="/api/news")
+app.include_router(whatsapp.router, prefix="/api/whatsapp")
+
 
 # ── Basic routes ──────────────────────────────────────────────
 @app.get("/")
 def root():
-    return {"status": "ok", "platform": "Takshvi Trade", "version": "2.0"}
+    return {"status": "ok", "platform": "Takshvi Trade", "version": "2.1"}
+
 
 @app.get("/health")
 def health():
     return {"status": "healthy"}
 
-# ── Master Scan (new — all 5 signal types) ───────────────────
+
+# ── DB Health ─────────────────────────────────────────────────
+@app.get("/db-status")
+def db_status():
+    """Check Supabase connection and return env var presence."""
+    import os
+    connected = is_connected()
+    return {
+        "supabase_connected": connected,
+        "has_url":  bool(os.getenv("SUPABASE_URL")),
+        "has_key":  bool(os.getenv("SUPABASE_KEY")),
+        "status":   "ok" if connected else "not_configured",
+    }
+
+
+# ── Scan History ──────────────────────────────────────────────
+@app.get("/api/history")
+def scan_history(limit: int = 10):
+    """Returns the last N scan results from Supabase."""
+    rows = get_recent_scans(limit=limit)
+    return {"count": len(rows), "history": rows}
+
+
+@app.get("/api/signals/open")
+def open_signals(limit: int = 50):
+    """Returns signals that haven't been marked with an outcome yet."""
+    rows = get_open_signals(limit=limit)
+    return {"count": len(rows), "signals": rows}
+
+
+@app.get("/api/alerts/log")
+def alert_log(limit: int = 50):
+    """Returns recent WhatsApp alert logs."""
+    rows = get_alert_logs(limit=limit)
+    return {"count": len(rows), "logs": rows}
+
+
+# ── Master Scan (auto-saves to Supabase) ─────────────────────
 @app.get("/run-master-scan")
 def master_scan(capital: int = 100000):
+    """
+    Runs full master scan across 50 Nifty stocks.
+    Automatically saves scan + signals to Supabase.
+    """
     try:
         result = run_master_scan(
             capital=capital,
             risk_amount=int(capital * 0.01)
         )
-        return result
+
+        # ── Auto-save to Supabase ──────────────────────────────
+        scan_id       = save_scan(result, capital)
+        signals_saved = 0
+        if scan_id:
+            signals_saved = save_signals(result, scan_id)
+            logging.info(f"DB save: scan_id={scan_id}, signals={signals_saved}")
+
+        return {
+            **result,
+            "scan_id":       scan_id,
+            "signals_saved": signals_saved,
+        }
+
     except Exception as e:
         logging.error(f"Master scan error: {e}")
         return {
@@ -79,8 +150,11 @@ def master_scan(capital: int = 100000):
             "short_signals":     [],
             "pre_breakdown":     [],
             "relative_strength": [],
-            "error":             str(e)
+            "scan_id":           None,
+            "signals_saved":     0,
+            "error":             str(e),
         }
+
 
 # ── Legacy scan (backward compat) ────────────────────────────
 @app.get("/run-scan")
@@ -98,6 +172,7 @@ def run_scan(capital: int = 50000):
     except Exception as e:
         logging.error(f"Scan error: {e}")
         return {"count": 0, "data": [], "market_trend": "SIDEWAYS", "nifty": None, "change_pct": None}
+
 
 # ── Chart data ────────────────────────────────────────────────
 @app.get("/chart")
@@ -125,6 +200,7 @@ def get_chart(symbol: str = "INFY.NS"):
         logging.error(f"Chart error: {e}")
         return {"data": []}
 
+
 # ── CSV Download ──────────────────────────────────────────────
 @app.get("/download-csv")
 def download_csv(capital: int = 50000):
@@ -132,16 +208,16 @@ def download_csv(capital: int = 50000):
         results = run_full_scan(capital=capital)
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["Stock","Score","Entry","SL","Target","RR","Qty","Position"])
+        writer.writerow(["Stock", "Score", "Entry", "SL", "Target", "RR", "Qty", "Position"])
         if not results:
-            writer.writerow(["No trades","","","","","","",""])
+            writer.writerow(["No trades", "", "", "", "", "", "", ""])
         else:
             for r in results:
                 writer.writerow([
-                    r.get("stock",""), r.get("score",0),
-                    r.get("entry",0),  r.get("sl",0),
-                    r.get("target",0), r.get("rr",0),
-                    r.get("qty",0),    r.get("position",0)
+                    r.get("stock", ""),  r.get("score", 0),
+                    r.get("entry", 0),   r.get("sl", 0),
+                    r.get("target", 0),  r.get("rr", 0),
+                    r.get("qty", 0),     r.get("position", 0)
                 ])
         output.seek(0)
         return StreamingResponse(
