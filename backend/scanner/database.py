@@ -1,98 +1,143 @@
 """
-Takshvi Trade — database.py
-Supabase integration with EXACT column names from schema.
+Takshvi Trade — database.py  v3
+Uses requests directly to Supabase REST API.
+Bypasses the supabase Python client (which uses httpx and fails DNS on Render free tier).
 
-Tables:
-  scan_history  — one row per scan run
-  signals       — one row per signal generated
-  alert_logs    — one row per WhatsApp message sent
-  users         — registered users
+Tables: scan_history · signals · alert_logs · users
 """
 
 import os
 import logging
 import uuid
+import requests
 from datetime import datetime, timezone
 from typing import Optional
 
-# ── Supabase client ────────────────────────────────────────────
-try:
-    from supabase import create_client, Client
-    SUPABASE_AVAILABLE = True
-except ImportError:
-    SUPABASE_AVAILABLE = False
-    logging.warning("supabase package not installed — pip install supabase")
-
+# ── Config ─────────────────────────────────────────────────────
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 
-_client: Optional["Client"] = None
+HEADERS = {
+    "apikey":        SUPABASE_KEY,
+    "Authorization": f"Bearer {SUPABASE_KEY}",
+    "Content-Type":  "application/json",
+    "Prefer":        "return=representation",
+}
+
+TIMEOUT = 10   # seconds
 
 
-def get_client() -> Optional["Client"]:
-    """Returns a cached Supabase client, or None if not configured."""
-    global _client
-    if _client:
-        return _client
-    if not SUPABASE_AVAILABLE:
-        logging.error("DB: supabase package not installed")
-        return None
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        logging.error(f"DB: missing env vars — URL={bool(SUPABASE_URL)} KEY={bool(SUPABASE_KEY)}")
-        return None
+def _url(table: str) -> str:
+    return f"{SUPABASE_URL}/rest/v1/{table}"
+
+
+# ── Core helpers ───────────────────────────────────────────────
+
+def _insert(table: str, row: dict):
     try:
-        logging.info(f"DB: connecting to {SUPABASE_URL[:40]}...")
-        _client = create_client(SUPABASE_URL, SUPABASE_KEY)
-        logging.info("DB: client created successfully")
-        return _client
+        r = requests.post(_url(table), json=row, headers=HEADERS, timeout=TIMEOUT)
+        r.raise_for_status()
+        data = r.json()
+        return data[0] if isinstance(data, list) and data else data
     except Exception as e:
-        logging.error(f"DB: create_client failed — {type(e).__name__}: {e}")
+        logging.error(f"DB insert {table}: {type(e).__name__}: {e}")
         return None
 
+
+def _insert_many(table: str, rows: list) -> int:
+    if not rows:
+        return 0
+    try:
+        r = requests.post(_url(table), json=rows, headers=HEADERS, timeout=TIMEOUT)
+        r.raise_for_status()
+        return len(rows)
+    except Exception as e:
+        logging.error(f"DB insert_many {table}: {type(e).__name__}: {e}")
+        return 0
+
+
+def _select(table: str, params: dict) -> list:
+    try:
+        r = requests.get(_url(table), params=params, headers=HEADERS, timeout=TIMEOUT)
+        r.raise_for_status()
+        return r.json() or []
+    except Exception as e:
+        logging.error(f"DB select {table}: {type(e).__name__}: {e}")
+        return []
+
+
+def _update(table: str, filter_params: dict, data: dict) -> bool:
+    try:
+        r = requests.patch(_url(table), params=filter_params, json=data,
+                           headers=HEADERS, timeout=TIMEOUT)
+        r.raise_for_status()
+        return True
+    except Exception as e:
+        logging.error(f"DB update {table}: {type(e).__name__}: {e}")
+        return False
+
+
+def _upsert(table: str, row: dict, on_conflict: str):
+    hdrs = {**HEADERS, "Prefer": "resolution=merge-duplicates,return=representation"}
+    try:
+        r = requests.post(
+            f"{_url(table)}?on_conflict={on_conflict}",
+            json=row, headers=hdrs, timeout=TIMEOUT
+        )
+        r.raise_for_status()
+        data = r.json()
+        return data[0] if isinstance(data, list) and data else data
+    except Exception as e:
+        logging.error(f"DB upsert {table}: {type(e).__name__}: {e}")
+        return None
+
+
+# ── Health check ───────────────────────────────────────────────
 
 def is_connected() -> bool:
-    """Quick health check — returns True if Supabase is reachable."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        logging.error("DB: SUPABASE_URL or SUPABASE_KEY not set")
+        return False
     try:
-        db = get_client()
-        if not db:
-            return False
-        result = db.table("scan_history").select("id").limit(1).execute()
-        logging.info(f"DB: health check OK — {result}")
-        return True
+        r = requests.get(
+            _url("scan_history"),
+            params={"select": "id", "limit": "1"},
+            headers=HEADERS,
+            timeout=TIMEOUT
+        )
+        ok = r.status_code in (200, 206)
+        if ok:
+            logging.info("DB: health check OK ✅")
+        else:
+            logging.error(f"DB: health check failed — HTTP {r.status_code}: {r.text[:200]}")
+        return ok
     except Exception as e:
         logging.error(f"DB: health check FAILED — {type(e).__name__}: {e}")
         return False
 
 
 def get_connection_error() -> str:
-    """Returns the last connection error string for the /db-status endpoint."""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return "missing env vars"
     try:
-        db = get_client()
-        if not db:
-            return "client_init_failed"
-        db.table("scan_history").select("id").limit(1).execute()
-        return ""
+        r = requests.get(
+            _url("scan_history"),
+            params={"select": "id", "limit": "1"},
+            headers=HEADERS,
+            timeout=TIMEOUT
+        )
+        if r.status_code in (200, 206):
+            return ""
+        return f"HTTP {r.status_code}: {r.text[:300]}"
     except Exception as e:
         return f"{type(e).__name__}: {e}"
 
 
 # ════════════════════════════════════════════════════════════
 # scan_history
-# Columns: id, scanned_at, market_trend, nifty_value,
-#          change_pct, is_crash, long_count, short_count,
-#          pre_bo_count, pre_bd_count, rs_count,
-#          scan_time_sec, capital
 # ════════════════════════════════════════════════════════════
 
 def save_scan(scan_result: dict, capital: float) -> Optional[str]:
-    """
-    Inserts one row into scan_history.
-    Returns the new scan UUID (used as FK for signals rows), or None on failure.
-    """
-    db = get_client()
-    if not db:
-        return None
-
     scan_id = str(uuid.uuid4())
     row = {
         "id":            scan_id,
@@ -109,62 +154,38 @@ def save_scan(scan_result: dict, capital: float) -> Optional[str]:
         "scan_time_sec": scan_result.get("scan_time"),
         "capital":       capital,
     }
-
-    try:
-        db.table("scan_history").insert(row).execute()
-        logging.info(f"Scan saved → scan_id={scan_id}")
+    result = _insert("scan_history", row)
+    if result is not None:
+        logging.info(f"DB: scan saved → scan_id={scan_id}")
         return scan_id
-    except Exception as e:
-        logging.error(f"save_scan error: {e}")
-        return None
+    return None
 
 
 def get_recent_scans(limit: int = 10) -> list:
-    """Returns the most recent scan_history rows."""
-    db = get_client()
-    if not db:
-        return []
-    try:
-        res = (
-            db.table("scan_history")
-            .select("*")
-            .order("scanned_at", desc=True)
-            .limit(limit)
-            .execute()
-        )
-        return res.data or []
-    except Exception as e:
-        logging.error(f"get_recent_scans error: {e}")
-        return []
+    return _select("scan_history", {
+        "select": "*", "order": "scanned_at.desc", "limit": str(limit)
+    })
 
 
 # ════════════════════════════════════════════════════════════
 # signals
-# Columns: id, scan_id, generated_at, signal_type, stock,
-#          close_price, entry, stop_loss, target, quantity,
-#          position_value, risk_reward, score, action,
-#          upside_pct, near_52w_high, near_52w_low, caution,
-#          market_trend, weekly_ema20, weekly_ema50,
-#          outcome, outcome_date, outcome_price,
-#          pnl_per_share, pnl_total
 # ════════════════════════════════════════════════════════════
 
-def _build_signal_row(signal: dict, scan_id: str, signal_type: str,
-                      market_trend: str) -> dict:
-    """Maps scanner output dict → exact Supabase column names."""
+def _build_signal_row(signal: dict, scan_id: str,
+                      signal_type: str, market_trend: str) -> dict:
     return {
         "id":             str(uuid.uuid4()),
         "scan_id":        scan_id,
         "generated_at":   datetime.now(timezone.utc).isoformat(),
-        "signal_type":    signal_type,                         # LONG | SHORT | PRE_BREAKOUT | PRE_BREAKDOWN | RS
+        "signal_type":    signal_type,
         "stock":          signal.get("stock", ""),
         "close_price":    signal.get("close"),
         "entry":          signal.get("entry"),
-        "stop_loss":      signal.get("sl"),                    # scanner uses "sl"
+        "stop_loss":      signal.get("sl"),
         "target":         signal.get("target"),
-        "quantity":       signal.get("qty"),                   # scanner uses "qty"
-        "position_value": signal.get("position"),              # scanner uses "position"
-        "risk_reward":    signal.get("rr"),                    # scanner uses "rr"
+        "quantity":       signal.get("qty"),
+        "position_value": signal.get("position"),
+        "risk_reward":    signal.get("rr"),
         "score":          signal.get("score"),
         "action":         signal.get("action"),
         "upside_pct":     signal.get("upside_pct"),
@@ -174,7 +195,6 @@ def _build_signal_row(signal: dict, scan_id: str, signal_type: str,
         "market_trend":   market_trend,
         "weekly_ema20":   signal.get("weekly_ema20"),
         "weekly_ema50":   signal.get("weekly_ema50"),
-        # outcome fields — filled later via update_signal_outcome()
         "outcome":        None,
         "outcome_date":   None,
         "outcome_price":  None,
@@ -184,218 +204,91 @@ def _build_signal_row(signal: dict, scan_id: str, signal_type: str,
 
 
 def save_signals(scan_result: dict, scan_id: str) -> int:
-    """
-    Bulk-inserts all signals from a master scan result into the signals table.
-    Returns count of rows saved.
-    """
-    db = get_client()
-    if not db:
-        return 0
-
     market_trend = scan_result.get("market_trend", "SIDEWAYS")
     rows = []
-
     for sig in scan_result.get("long_signals", []):
         rows.append(_build_signal_row(sig, scan_id, "LONG", market_trend))
-
     for sig in scan_result.get("short_signals", []):
         rows.append(_build_signal_row(sig, scan_id, "SHORT", market_trend))
-
     for sig in scan_result.get("pre_breakout", []):
         rows.append(_build_signal_row(sig, scan_id, "PRE_BREAKOUT", market_trend))
-
     for sig in scan_result.get("pre_breakdown", []):
         rows.append(_build_signal_row(sig, scan_id, "PRE_BREAKDOWN", market_trend))
-
     for sig in scan_result.get("relative_strength", []):
         rows.append(_build_signal_row(sig, scan_id, "RS", market_trend))
-
-    if not rows:
-        return 0
-
-    try:
-        db.table("signals").insert(rows).execute()
-        logging.info(f"Saved {len(rows)} signals for scan_id={scan_id}")
-        return len(rows)
-    except Exception as e:
-        logging.error(f"save_signals error: {e}")
-        return 0
+    saved = _insert_many("signals", rows)
+    logging.info(f"DB: {saved} signals saved for scan_id={scan_id}")
+    return saved
 
 
-def update_signal_outcome(
-    signal_id: str,
-    outcome: str,           # "WIN" | "LOSS" | "PARTIAL" | "OPEN"
-    outcome_price: float,
-    pnl_per_share: float,
-    pnl_total: float,
-) -> bool:
-    """Updates outcome fields for a signal after trade closes."""
-    db = get_client()
-    if not db:
-        return False
-    try:
-        db.table("signals").update({
-            "outcome":       outcome,
-            "outcome_date":  datetime.now(timezone.utc).isoformat(),
-            "outcome_price": outcome_price,
-            "pnl_per_share": pnl_per_share,
-            "pnl_total":     pnl_total,
-        }).eq("id", signal_id).execute()
-        return True
-    except Exception as e:
-        logging.error(f"update_signal_outcome error: {e}")
-        return False
+def update_signal_outcome(signal_id: str, outcome: str, outcome_price: float,
+                           pnl_per_share: float, pnl_total: float) -> bool:
+    return _update("signals", {"id": f"eq.{signal_id}"}, {
+        "outcome":       outcome,
+        "outcome_date":  datetime.now(timezone.utc).isoformat(),
+        "outcome_price": outcome_price,
+        "pnl_per_share": pnl_per_share,
+        "pnl_total":     pnl_total,
+    })
 
 
 def get_signals_for_scan(scan_id: str) -> list:
-    db = get_client()
-    if not db:
-        return []
-    try:
-        res = db.table("signals").select("*").eq("scan_id", scan_id).execute()
-        return res.data or []
-    except Exception as e:
-        logging.error(f"get_signals_for_scan error: {e}")
-        return []
+    return _select("signals", {"select": "*", "scan_id": f"eq.{scan_id}"})
 
 
 def get_open_signals(limit: int = 50) -> list:
-    """Returns signals where outcome is still NULL (open trades)."""
-    db = get_client()
-    if not db:
-        return []
-    try:
-        res = (
-            db.table("signals")
-            .select("*")
-            .is_("outcome", "null")
-            .order("generated_at", desc=True)
-            .limit(limit)
-            .execute()
-        )
-        return res.data or []
-    except Exception as e:
-        logging.error(f"get_open_signals error: {e}")
-        return []
+    return _select("signals", {
+        "select": "*", "outcome": "is.null",
+        "order": "generated_at.desc", "limit": str(limit)
+    })
 
 
 # ════════════════════════════════════════════════════════════
 # alert_logs
-# Columns: id, sent_at, phone, alert_type, stock,
-#          message_sid, status, error
 # ════════════════════════════════════════════════════════════
 
-def log_alert(
-    phone: str,
-    alert_type: str,    # "LONG" | "SHORT" | "PRE_BREAKOUT" | "SUMMARY" | "TEST"
-    stock: str = "",
-    message_sid: str = "",
-    status: str = "sent",
-    error: str = "",
-) -> bool:
-    """Logs a sent (or failed) WhatsApp alert into alert_logs."""
-    db = get_client()
-    if not db:
-        return False
-    try:
-        db.table("alert_logs").insert({
-            "id":          str(uuid.uuid4()),
-            "sent_at":     datetime.now(timezone.utc).isoformat(),
-            "phone":       phone,
-            "alert_type":  alert_type,
-            "stock":       stock,
-            "message_sid": message_sid,
-            "status":      status,
-            "error":       error,
-        }).execute()
-        return True
-    except Exception as e:
-        logging.error(f"log_alert error: {e}")
-        return False
+def log_alert(phone: str, alert_type: str, stock: str = "",
+              message_sid: str = "", status: str = "sent", error: str = "") -> bool:
+    return _insert("alert_logs", {
+        "id":          str(uuid.uuid4()),
+        "sent_at":     datetime.now(timezone.utc).isoformat(),
+        "phone":       phone,
+        "alert_type":  alert_type,
+        "stock":       stock,
+        "message_sid": message_sid,
+        "status":      status,
+        "error":       error,
+    }) is not None
 
 
 def get_alert_logs(limit: int = 50) -> list:
-    db = get_client()
-    if not db:
-        return []
-    try:
-        res = (
-            db.table("alert_logs")
-            .select("*")
-            .order("sent_at", desc=True)
-            .limit(limit)
-            .execute()
-        )
-        return res.data or []
-    except Exception as e:
-        logging.error(f"get_alert_logs error: {e}")
-        return []
+    return _select("alert_logs", {
+        "select": "*", "order": "sent_at.desc", "limit": str(limit)
+    })
 
 
 # ════════════════════════════════════════════════════════════
 # users
-# Columns: id, created_at, email, phone, name, plan,
-#          plan_expires_at, is_active, capital, alerts_enabled
 # ════════════════════════════════════════════════════════════
 
-def upsert_user(
-    email: str,
-    name: str = "",
-    phone: str = "",
-    plan: str = "free",
-    capital: float = 100000,
-    alerts_enabled: bool = False,
-) -> Optional[dict]:
-    """Creates or updates a user record. Uses email as the unique key."""
-    db = get_client()
-    if not db:
-        return None
-    try:
-        row = {
-            "id":              str(uuid.uuid4()),
-            "created_at":      datetime.now(timezone.utc).isoformat(),
-            "email":           email,
-            "phone":           phone,
-            "name":            name,
-            "plan":            plan,
-            "plan_expires_at": None,
-            "is_active":       True,
-            "capital":         capital,
-            "alerts_enabled":  alerts_enabled,
-        }
-        res = db.table("users").upsert(row, on_conflict="email").execute()
-        return res.data[0] if res.data else None
-    except Exception as e:
-        logging.error(f"upsert_user error: {e}")
-        return None
+def upsert_user(email: str, name: str = "", phone: str = "", plan: str = "free",
+                capital: float = 100000, alerts_enabled: bool = False):
+    return _upsert("users", {
+        "id":              str(uuid.uuid4()),
+        "created_at":      datetime.now(timezone.utc).isoformat(),
+        "email":           email, "phone": phone, "name": name,
+        "plan":            plan, "plan_expires_at": None,
+        "is_active":       True, "capital": capital,
+        "alerts_enabled":  alerts_enabled,
+    }, on_conflict="email")
 
 
 def get_user_by_email(email: str) -> Optional[dict]:
-    db = get_client()
-    if not db:
-        return None
-    try:
-        res = db.table("users").select("*").eq("email", email).limit(1).execute()
-        return res.data[0] if res.data else None
-    except Exception as e:
-        logging.error(f"get_user_by_email error: {e}")
-        return None
+    rows = _select("users", {"select": "*", "email": f"eq.{email}", "limit": "1"})
+    return rows[0] if rows else None
 
 
 def get_users_with_alerts() -> list:
-    """Returns users who have alerts_enabled = True (for scheduled sends)."""
-    db = get_client()
-    if not db:
-        return []
-    try:
-        res = (
-            db.table("users")
-            .select("*")
-            .eq("alerts_enabled", True)
-            .eq("is_active", True)
-            .execute()
-        )
-        return res.data or []
-    except Exception as e:
-        logging.error(f"get_users_with_alerts error: {e}")
-        return []
+    return _select("users", {
+        "select": "*", "alerts_enabled": "eq.true", "is_active": "eq.true"
+    })
