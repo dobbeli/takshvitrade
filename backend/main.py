@@ -230,3 +230,16 @@ def download_csv(capital: int = 50000):
     except Exception as e:
         logging.error(f"CSV error: {e}")
         return {"message": "CSV generation failed"}
+
+@app.get("/ping-supabase")
+def ping_supabase():
+    import requests, os
+    url = os.getenv("SUPABASE_URL","") + "/rest/v1/scan_history?select=id&limit=1"
+    try:
+        r = requests.get(url, headers={
+            "apikey": os.getenv("SUPABASE_KEY",""),
+            "Authorization": "Bearer " + os.getenv("SUPABASE_KEY","")
+        }, timeout=15)
+        return {"status": r.status_code, "body": r.text[:200]}
+    except Exception as e:
+        return {"error": str(e)}
