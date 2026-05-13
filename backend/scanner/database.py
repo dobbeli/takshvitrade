@@ -1,7 +1,7 @@
 """
-Takshvi Trade — database.py  v3
-Uses requests directly to Supabase REST API.
-Bypasses the supabase Python client (which uses httpx and fails DNS on Render free tier).
+Takshvi Trade — database.py  v4
+Uses Render PostgreSQL (internal network) via psycopg2.
+Replaces Supabase client — fixes DNS failure on Render free tier.
 
 Tables: scan_history · signals · alert_logs · users
 """
@@ -9,128 +9,136 @@ Tables: scan_history · signals · alert_logs · users
 import os
 import logging
 import uuid
-import requests
 from datetime import datetime, timezone
 from typing import Optional
 
-# ── Config ─────────────────────────────────────────────────────
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
+# ── Connection ─────────────────────────────────────────────────
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-HEADERS = {
-    "apikey":        SUPABASE_KEY,
-    "Authorization": f"Bearer {SUPABASE_KEY}",
-    "Content-Type":  "application/json",
-    "Prefer":        "return=representation",
-}
-
-TIMEOUT = 10   # seconds
+try:
+    import psycopg2
+    import psycopg2.extras
+    PSYCOPG2_AVAILABLE = True
+except ImportError:
+    PSYCOPG2_AVAILABLE = False
+    logging.error("psycopg2 not installed — add psycopg2-binary to requirements.txt")
 
 
-def _url(table: str) -> str:
-    return f"{SUPABASE_URL}/rest/v1/{table}"
+def get_conn():
+    if not PSYCOPG2_AVAILABLE:
+        raise RuntimeError("psycopg2 not available")
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL not set")
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
 
-
-# ── Core helpers ───────────────────────────────────────────────
-
-def _insert(table: str, row: dict):
-    try:
-        r = requests.post(_url(table), json=row, headers=HEADERS, timeout=TIMEOUT)
-        r.raise_for_status()
-        data = r.json()
-        return data[0] if isinstance(data, list) and data else data
-    except Exception as e:
-        logging.error(f"DB insert {table}: {type(e).__name__}: {e}")
-        return None
-
-
-def _insert_many(table: str, rows: list) -> int:
-    if not rows:
-        return 0
-    try:
-        r = requests.post(_url(table), json=rows, headers=HEADERS, timeout=TIMEOUT)
-        r.raise_for_status()
-        return len(rows)
-    except Exception as e:
-        logging.error(f"DB insert_many {table}: {type(e).__name__}: {e}")
-        return 0
-
-
-def _select(table: str, params: dict) -> list:
-    try:
-        r = requests.get(_url(table), params=params, headers=HEADERS, timeout=TIMEOUT)
-        r.raise_for_status()
-        return r.json() or []
-    except Exception as e:
-        logging.error(f"DB select {table}: {type(e).__name__}: {e}")
-        return []
-
-
-def _update(table: str, filter_params: dict, data: dict) -> bool:
-    try:
-        r = requests.patch(_url(table), params=filter_params, json=data,
-                           headers=HEADERS, timeout=TIMEOUT)
-        r.raise_for_status()
-        return True
-    except Exception as e:
-        logging.error(f"DB update {table}: {type(e).__name__}: {e}")
-        return False
-
-
-def _upsert(table: str, row: dict, on_conflict: str):
-    hdrs = {**HEADERS, "Prefer": "resolution=merge-duplicates,return=representation"}
-    try:
-        r = requests.post(
-            f"{_url(table)}?on_conflict={on_conflict}",
-            json=row, headers=hdrs, timeout=TIMEOUT
-        )
-        r.raise_for_status()
-        data = r.json()
-        return data[0] if isinstance(data, list) and data else data
-    except Exception as e:
-        logging.error(f"DB upsert {table}: {type(e).__name__}: {e}")
-        return None
-
-
-# ── Health check ───────────────────────────────────────────────
 
 def is_connected() -> bool:
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        logging.error("DB: SUPABASE_URL or SUPABASE_KEY not set")
-        return False
     try:
-        r = requests.get(
-            _url("scan_history"),
-            params={"select": "id", "limit": "1"},
-            headers=HEADERS,
-            timeout=TIMEOUT
-        )
-        ok = r.status_code in (200, 206)
-        if ok:
-            logging.info("DB: health check OK ✅")
-        else:
-            logging.error(f"DB: health check failed — HTTP {r.status_code}: {r.text[:200]}")
-        return ok
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT 1")
+        conn.close()
+        logging.info("DB: health check OK ✅")
+        return True
     except Exception as e:
         logging.error(f"DB: health check FAILED — {type(e).__name__}: {e}")
         return False
 
 
 def get_connection_error() -> str:
-    if not SUPABASE_URL or not SUPABASE_KEY:
-        return "missing env vars"
     try:
-        r = requests.get(
-            _url("scan_history"),
-            params={"select": "id", "limit": "1"},
-            headers=HEADERS,
-            timeout=TIMEOUT
-        )
-        if r.status_code in (200, 206):
-            return ""
-        return f"HTTP {r.status_code}: {r.text[:300]}"
+        get_conn().close()
+        return ""
     except Exception as e:
         return f"{type(e).__name__}: {e}"
+
+
+# ── Schema bootstrap ───────────────────────────────────────────
+# Call once on startup to create tables if they don't exist.
+
+CREATE_TABLES_SQL = """
+CREATE TABLE IF NOT EXISTS scan_history (
+    id            TEXT PRIMARY KEY,
+    scanned_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    market_trend  TEXT,
+    nifty_value   NUMERIC,
+    change_pct    NUMERIC,
+    is_crash      BOOLEAN DEFAULT FALSE,
+    long_count    INT DEFAULT 0,
+    short_count   INT DEFAULT 0,
+    pre_bo_count  INT DEFAULT 0,
+    pre_bd_count  INT DEFAULT 0,
+    rs_count      INT DEFAULT 0,
+    scan_time_sec NUMERIC,
+    capital       NUMERIC
+);
+
+CREATE TABLE IF NOT EXISTS signals (
+    id             TEXT PRIMARY KEY,
+    scan_id        TEXT REFERENCES scan_history(id),
+    generated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    signal_type    TEXT,
+    stock          TEXT,
+    close_price    NUMERIC,
+    entry          NUMERIC,
+    stop_loss      NUMERIC,
+    target         NUMERIC,
+    quantity       INT,
+    position_value NUMERIC,
+    risk_reward    NUMERIC,
+    score          INT,
+    action         TEXT,
+    upside_pct     NUMERIC,
+    near_52w_high  BOOLEAN DEFAULT FALSE,
+    near_52w_low   BOOLEAN DEFAULT FALSE,
+    caution        BOOLEAN DEFAULT FALSE,
+    market_trend   TEXT,
+    weekly_ema20   NUMERIC,
+    weekly_ema50   NUMERIC,
+    outcome        TEXT,
+    outcome_date   TIMESTAMPTZ,
+    outcome_price  NUMERIC,
+    pnl_per_share  NUMERIC,
+    pnl_total      NUMERIC
+);
+
+CREATE TABLE IF NOT EXISTS alert_logs (
+    id          TEXT PRIMARY KEY,
+    sent_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    phone       TEXT,
+    alert_type  TEXT,
+    stock       TEXT,
+    message_sid TEXT,
+    status      TEXT,
+    error       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS users (
+    id              TEXT PRIMARY KEY,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    email           TEXT UNIQUE,
+    phone           TEXT,
+    name            TEXT,
+    plan            TEXT DEFAULT 'free',
+    plan_expires_at TIMESTAMPTZ,
+    is_active       BOOLEAN DEFAULT TRUE,
+    capital         NUMERIC DEFAULT 100000,
+    alerts_enabled  BOOLEAN DEFAULT FALSE
+);
+"""
+
+
+def bootstrap_schema():
+    """Creates all tables if they don't exist. Call once at startup."""
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(CREATE_TABLES_SQL)
+        conn.commit()
+        conn.close()
+        logging.info("DB: schema bootstrap complete ✅")
+    except Exception as e:
+        logging.error(f"DB: schema bootstrap FAILED — {e}")
 
 
 # ════════════════════════════════════════════════════════════
@@ -139,32 +147,51 @@ def get_connection_error() -> str:
 
 def save_scan(scan_result: dict, capital: float) -> Optional[str]:
     scan_id = str(uuid.uuid4())
-    row = {
-        "id":            scan_id,
-        "scanned_at":    datetime.now(timezone.utc).isoformat(),
-        "market_trend":  scan_result.get("market_trend", "SIDEWAYS"),
-        "nifty_value":   scan_result.get("nifty"),
-        "change_pct":    scan_result.get("change_pct"),
-        "is_crash":      scan_result.get("is_crash", False),
-        "long_count":    len(scan_result.get("long_signals", [])),
-        "short_count":   len(scan_result.get("short_signals", [])),
-        "pre_bo_count":  len(scan_result.get("pre_breakout", [])),
-        "pre_bd_count":  len(scan_result.get("pre_breakdown", [])),
-        "rs_count":      len(scan_result.get("relative_strength", [])),
-        "scan_time_sec": scan_result.get("scan_time"),
-        "capital":       capital,
-    }
-    result = _insert("scan_history", row)
-    if result is not None:
-        logging.info(f"DB: scan saved → scan_id={scan_id}")
+    sql = """
+        INSERT INTO scan_history
+            (id, scanned_at, market_trend, nifty_value, change_pct, is_crash,
+             long_count, short_count, pre_bo_count, pre_bd_count, rs_count,
+             scan_time_sec, capital)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(sql, (
+            scan_id,
+            datetime.now(timezone.utc),
+            scan_result.get("market_trend", "SIDEWAYS"),
+            scan_result.get("nifty"),
+            scan_result.get("change_pct"),
+            scan_result.get("is_crash", False),
+            len(scan_result.get("long_signals", [])),
+            len(scan_result.get("short_signals", [])),
+            len(scan_result.get("pre_breakout", [])),
+            len(scan_result.get("pre_breakdown", [])),
+            len(scan_result.get("relative_strength", [])),
+            scan_result.get("scan_time"),
+            capital,
+        ))
+        conn.commit()
+        conn.close()
+        logging.info(f"DB: scan saved → {scan_id}")
         return scan_id
-    return None
+    except Exception as e:
+        logging.error(f"save_scan error: {e}")
+        return None
 
 
 def get_recent_scans(limit: int = 10) -> list:
-    return _select("scan_history", {
-        "select": "*", "order": "scanned_at.desc", "limit": str(limit)
-    })
+    try:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM scan_history ORDER BY scanned_at DESC LIMIT %s", (limit,))
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return rows
+    except Exception as e:
+        logging.error(f"get_recent_scans error: {e}")
+        return []
 
 
 # ════════════════════════════════════════════════════════════
@@ -172,75 +199,102 @@ def get_recent_scans(limit: int = 10) -> list:
 # ════════════════════════════════════════════════════════════
 
 def _build_signal_row(signal: dict, scan_id: str,
-                      signal_type: str, market_trend: str) -> dict:
-    return {
-        "id":             str(uuid.uuid4()),
-        "scan_id":        scan_id,
-        "generated_at":   datetime.now(timezone.utc).isoformat(),
-        "signal_type":    signal_type,
-        "stock":          signal.get("stock", ""),
-        "close_price":    signal.get("close"),
-        "entry":          signal.get("entry"),
-        "stop_loss":      signal.get("sl"),
-        "target":         signal.get("target"),
-        "quantity":       signal.get("qty"),
-        "position_value": signal.get("position"),
-        "risk_reward":    signal.get("rr"),
-        "score":          signal.get("score"),
-        "action":         signal.get("action"),
-        "upside_pct":     signal.get("upside_pct"),
-        "near_52w_high":  signal.get("near_52w_high", False),
-        "near_52w_low":   signal.get("near_52w_low", False),
-        "caution":        signal.get("caution", False),
-        "market_trend":   market_trend,
-        "weekly_ema20":   signal.get("weekly_ema20"),
-        "weekly_ema50":   signal.get("weekly_ema50"),
-        "outcome":        None,
-        "outcome_date":   None,
-        "outcome_price":  None,
-        "pnl_per_share":  None,
-        "pnl_total":      None,
-    }
+                      signal_type: str, market_trend: str) -> tuple:
+    return (
+        str(uuid.uuid4()), scan_id, datetime.now(timezone.utc),
+        signal_type, signal.get("stock", ""),
+        signal.get("close"), signal.get("entry"),
+        signal.get("sl"),       # scanner key → stop_loss column
+        signal.get("target"),
+        signal.get("qty"),      # scanner key → quantity column
+        signal.get("position"), # scanner key → position_value column
+        signal.get("rr"),       # scanner key → risk_reward column
+        signal.get("score"), signal.get("action"), signal.get("upside_pct"),
+        signal.get("near_52w_high", False), signal.get("near_52w_low", False),
+        signal.get("caution", False), market_trend,
+        signal.get("weekly_ema20"), signal.get("weekly_ema50"),
+        None, None, None, None, None,  # outcome fields
+    )
 
 
 def save_signals(scan_result: dict, scan_id: str) -> int:
     market_trend = scan_result.get("market_trend", "SIDEWAYS")
     rows = []
-    for sig in scan_result.get("long_signals", []):
-        rows.append(_build_signal_row(sig, scan_id, "LONG", market_trend))
-    for sig in scan_result.get("short_signals", []):
-        rows.append(_build_signal_row(sig, scan_id, "SHORT", market_trend))
-    for sig in scan_result.get("pre_breakout", []):
-        rows.append(_build_signal_row(sig, scan_id, "PRE_BREAKOUT", market_trend))
-    for sig in scan_result.get("pre_breakdown", []):
-        rows.append(_build_signal_row(sig, scan_id, "PRE_BREAKDOWN", market_trend))
-    for sig in scan_result.get("relative_strength", []):
-        rows.append(_build_signal_row(sig, scan_id, "RS", market_trend))
-    saved = _insert_many("signals", rows)
-    logging.info(f"DB: {saved} signals saved for scan_id={scan_id}")
-    return saved
+    for s in scan_result.get("long_signals",      []): rows.append(_build_signal_row(s, scan_id, "LONG",          market_trend))
+    for s in scan_result.get("short_signals",     []): rows.append(_build_signal_row(s, scan_id, "SHORT",         market_trend))
+    for s in scan_result.get("pre_breakout",      []): rows.append(_build_signal_row(s, scan_id, "PRE_BREAKOUT",  market_trend))
+    for s in scan_result.get("pre_breakdown",     []): rows.append(_build_signal_row(s, scan_id, "PRE_BREAKDOWN", market_trend))
+    for s in scan_result.get("relative_strength", []): rows.append(_build_signal_row(s, scan_id, "RS",            market_trend))
+    if not rows:
+        return 0
+    sql = """
+        INSERT INTO signals
+            (id, scan_id, generated_at, signal_type, stock,
+             close_price, entry, stop_loss, target, quantity,
+             position_value, risk_reward, score, action, upside_pct,
+             near_52w_high, near_52w_low, caution, market_trend,
+             weekly_ema20, weekly_ema50,
+             outcome, outcome_date, outcome_price, pnl_per_share, pnl_total)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        psycopg2.extras.execute_batch(cur, sql, rows)
+        conn.commit()
+        conn.close()
+        logging.info(f"DB: {len(rows)} signals saved for scan_id={scan_id}")
+        return len(rows)
+    except Exception as e:
+        logging.error(f"save_signals error: {e}")
+        return 0
 
 
 def update_signal_outcome(signal_id: str, outcome: str, outcome_price: float,
                            pnl_per_share: float, pnl_total: float) -> bool:
-    return _update("signals", {"id": f"eq.{signal_id}"}, {
-        "outcome":       outcome,
-        "outcome_date":  datetime.now(timezone.utc).isoformat(),
-        "outcome_price": outcome_price,
-        "pnl_per_share": pnl_per_share,
-        "pnl_total":     pnl_total,
-    })
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE signals SET outcome=%s, outcome_date=%s,
+            outcome_price=%s, pnl_per_share=%s, pnl_total=%s WHERE id=%s
+        """, (outcome, datetime.now(timezone.utc), outcome_price,
+               pnl_per_share, pnl_total, signal_id))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logging.error(f"update_signal_outcome error: {e}")
+        return False
 
 
 def get_signals_for_scan(scan_id: str) -> list:
-    return _select("signals", {"select": "*", "scan_id": f"eq.{scan_id}"})
+    try:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM signals WHERE scan_id=%s", (scan_id,))
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return rows
+    except Exception as e:
+        logging.error(f"get_signals_for_scan error: {e}")
+        return []
 
 
 def get_open_signals(limit: int = 50) -> list:
-    return _select("signals", {
-        "select": "*", "outcome": "is.null",
-        "order": "generated_at.desc", "limit": str(limit)
-    })
+    try:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT * FROM signals WHERE outcome IS NULL
+            ORDER BY generated_at DESC LIMIT %s
+        """, (limit,))
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return rows
+    except Exception as e:
+        logging.error(f"get_open_signals error: {e}")
+        return []
 
 
 # ════════════════════════════════════════════════════════════
@@ -249,22 +303,33 @@ def get_open_signals(limit: int = 50) -> list:
 
 def log_alert(phone: str, alert_type: str, stock: str = "",
               message_sid: str = "", status: str = "sent", error: str = "") -> bool:
-    return _insert("alert_logs", {
-        "id":          str(uuid.uuid4()),
-        "sent_at":     datetime.now(timezone.utc).isoformat(),
-        "phone":       phone,
-        "alert_type":  alert_type,
-        "stock":       stock,
-        "message_sid": message_sid,
-        "status":      status,
-        "error":       error,
-    }) is not None
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO alert_logs (id, sent_at, phone, alert_type, stock, message_sid, status, error)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+        """, (str(uuid.uuid4()), datetime.now(timezone.utc),
+               phone, alert_type, stock, message_sid, status, error))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        logging.error(f"log_alert error: {e}")
+        return False
 
 
 def get_alert_logs(limit: int = 50) -> list:
-    return _select("alert_logs", {
-        "select": "*", "order": "sent_at.desc", "limit": str(limit)
-    })
+    try:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM alert_logs ORDER BY sent_at DESC LIMIT %s", (limit,))
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return rows
+    except Exception as e:
+        logging.error(f"get_alert_logs error: {e}")
+        return []
 
 
 # ════════════════════════════════════════════════════════════
@@ -272,23 +337,49 @@ def get_alert_logs(limit: int = 50) -> list:
 # ════════════════════════════════════════════════════════════
 
 def upsert_user(email: str, name: str = "", phone: str = "", plan: str = "free",
-                capital: float = 100000, alerts_enabled: bool = False):
-    return _upsert("users", {
-        "id":              str(uuid.uuid4()),
-        "created_at":      datetime.now(timezone.utc).isoformat(),
-        "email":           email, "phone": phone, "name": name,
-        "plan":            plan, "plan_expires_at": None,
-        "is_active":       True, "capital": capital,
-        "alerts_enabled":  alerts_enabled,
-    }, on_conflict="email")
+                capital: float = 100000, alerts_enabled: bool = False) -> Optional[dict]:
+    try:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            INSERT INTO users (id, created_at, email, phone, name, plan, is_active, capital, alerts_enabled)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            ON CONFLICT (email) DO UPDATE SET
+                name=EXCLUDED.name, phone=EXCLUDED.phone, plan=EXCLUDED.plan,
+                capital=EXCLUDED.capital, alerts_enabled=EXCLUDED.alerts_enabled
+            RETURNING *
+        """, (str(uuid.uuid4()), datetime.now(timezone.utc),
+               email, phone, name, plan, True, capital, alerts_enabled))
+        row = dict(cur.fetchone())
+        conn.commit()
+        conn.close()
+        return row
+    except Exception as e:
+        logging.error(f"upsert_user error: {e}")
+        return None
 
 
 def get_user_by_email(email: str) -> Optional[dict]:
-    rows = _select("users", {"select": "*", "email": f"eq.{email}", "limit": "1"})
-    return rows[0] if rows else None
+    try:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM users WHERE email=%s LIMIT 1", (email,))
+        row = cur.fetchone()
+        conn.close()
+        return dict(row) if row else None
+    except Exception as e:
+        logging.error(f"get_user_by_email error: {e}")
+        return None
 
 
 def get_users_with_alerts() -> list:
-    return _select("users", {
-        "select": "*", "alerts_enabled": "eq.true", "is_active": "eq.true"
-    })
+    try:
+        conn = get_conn()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM users WHERE alerts_enabled=TRUE AND is_active=TRUE")
+        rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return rows
+    except Exception as e:
+        logging.error(f"get_users_with_alerts error: {e}")
+        return []
