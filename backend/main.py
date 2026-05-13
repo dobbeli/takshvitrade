@@ -228,3 +228,30 @@ def download_csv(capital: int = 50000):
     except Exception as e:
         logging.error(f"CSV error: {e}")
         return {"message": "CSV generation failed"}
+    
+    
+# ── TEMPORARY DEBUG — remove after fixing Supabase ───────────
+@app.get("/debug-env")
+def debug_env():
+    import os
+    url = os.getenv("SUPABASE_URL", "")
+    key = os.getenv("SUPABASE_KEY", "")
+    # Decode the JWT role claim without any library
+    import base64, json
+    role = "unknown"
+    try:
+        payload_b64 = key.split(".")[1]
+        # Add padding
+        payload_b64 += "=" * (4 - len(payload_b64) % 4)
+        payload = json.loads(base64.b64decode(payload_b64))
+        role = payload.get("role", "unknown")
+    except:
+        role = "decode_failed"
+
+    return {
+        "url_start":   url[:40],
+        "key_start":   key[:30],
+        "key_role":    role,          # <-- THIS IS THE KEY CHECK
+        "key_is_anon": role == "anon",
+        "key_is_svc":  role == "service_role",
+    }
