@@ -23,8 +23,8 @@ except ImportError:
     SUPABASE_AVAILABLE = False
     logging.warning("supabase package not installed — pip install supabase")
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")   # use service_role key for backend writes
+SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 
 _client: Optional["Client"] = None
 
@@ -35,15 +35,18 @@ def get_client() -> Optional["Client"]:
     if _client:
         return _client
     if not SUPABASE_AVAILABLE:
+        logging.error("DB: supabase package not installed")
         return None
     if not SUPABASE_URL or not SUPABASE_KEY:
-        logging.warning("SUPABASE_URL or SUPABASE_KEY not set")
+        logging.error(f"DB: missing env vars — URL={bool(SUPABASE_URL)} KEY={bool(SUPABASE_KEY)}")
         return None
     try:
+        logging.info(f"DB: connecting to {SUPABASE_URL[:40]}...")
         _client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        logging.info("DB: client created successfully")
         return _client
     except Exception as e:
-        logging.error(f"Supabase init error: {e}")
+        logging.error(f"DB: create_client failed — {type(e).__name__}: {e}")
         return None
 
 
@@ -53,10 +56,24 @@ def is_connected() -> bool:
         db = get_client()
         if not db:
             return False
-        db.table("scan_history").select("id").limit(1).execute()
+        result = db.table("scan_history").select("id").limit(1).execute()
+        logging.info(f"DB: health check OK — {result}")
         return True
-    except Exception:
+    except Exception as e:
+        logging.error(f"DB: health check FAILED — {type(e).__name__}: {e}")
         return False
+
+
+def get_connection_error() -> str:
+    """Returns the last connection error string for the /db-status endpoint."""
+    try:
+        db = get_client()
+        if not db:
+            return "client_init_failed"
+        db.table("scan_history").select("id").limit(1).execute()
+        return ""
+    except Exception as e:
+        return f"{type(e).__name__}: {e}"
 
 
 # ════════════════════════════════════════════════════════════

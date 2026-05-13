@@ -28,7 +28,7 @@ from scanner.engine import run_full_scan, run_master_scan, get_market_trend
 # Database
 from scanner.database import (
     save_scan, save_signals, get_recent_scans,
-    get_open_signals, get_alert_logs, is_connected
+    get_open_signals, get_alert_logs, is_connected, get_connection_error
 )
 
 print("✅ All imports successful")
@@ -81,11 +81,13 @@ def db_status():
     """Check Supabase connection and return env var presence."""
     import os
     connected = is_connected()
+    error_msg = "" if connected else get_connection_error()
     return {
         "supabase_connected": connected,
         "has_url":  bool(os.getenv("SUPABASE_URL")),
         "has_key":  bool(os.getenv("SUPABASE_KEY")),
         "status":   "ok" if connected else "not_configured",
+        "error":    error_msg,
     }
 
 
@@ -228,30 +230,3 @@ def download_csv(capital: int = 50000):
     except Exception as e:
         logging.error(f"CSV error: {e}")
         return {"message": "CSV generation failed"}
-    
-    
-# ── TEMPORARY DEBUG — remove after fixing Supabase ───────────
-@app.get("/debug-env")
-def debug_env():
-    import os
-    url = os.getenv("SUPABASE_URL", "")
-    key = os.getenv("SUPABASE_KEY", "")
-    # Decode the JWT role claim without any library
-    import base64, json
-    role = "unknown"
-    try:
-        payload_b64 = key.split(".")[1]
-        # Add padding
-        payload_b64 += "=" * (4 - len(payload_b64) % 4)
-        payload = json.loads(base64.b64decode(payload_b64))
-        role = payload.get("role", "unknown")
-    except:
-        role = "decode_failed"
-
-    return {
-        "url_start":   url[:40],
-        "key_start":   key[:30],
-        "key_role":    role,          # <-- THIS IS THE KEY CHECK
-        "key_is_anon": role == "anon",
-        "key_is_svc":  role == "service_role",
-    }
