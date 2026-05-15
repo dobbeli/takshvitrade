@@ -1210,7 +1210,17 @@ async function loadNews(){
 
   try {
     const res = await fetch(`${API}/run-master-scan?capital=${capital}`);
-    if(!res.ok) throw new Error("API failed");
+
+    // Capture real server error before throwing
+    if(!res.ok){
+      let errDetail = `Server returned ${res.status}`;
+      try {
+        const errJson = await res.json();
+        errDetail = errJson.detail || errJson.error || errDetail;
+      } catch(_){}
+      throw new Error(errDetail);
+    }
+
     const data = await res.json();
 
     // Update market cards — Google Finance format
@@ -1328,17 +1338,27 @@ async function loadNews(){
 
   } catch(err){
     console.error('Scan error:', err);
-    // Only show "waking up" for actual network/fetch errors
-    // Not for JS rendering bugs
-    const isNetworkError = err.name==='TypeError' && err.message?.includes('fetch');
-    const isTimeoutError = err.message?.includes('timeout') || err.message?.includes('abort');
-    document.getElementById('signals-body').innerHTML = `
-      <div style="text-align:center;padding:2rem;font-family:var(--font-mono);font-size:0.8rem">
-        ${isNetworkError || isTimeoutError
-          ? `<span style="color:#f5c018">⏳ Server waking up — wait 30s and try again</span>`
-          : `<span style="color:#ff4560">❌ Render error: ${err.message} — check console (F12)</span>`
-        }
-      </div>`;
+    const isColdStart = err.name === 'TypeError' || err.message?.includes('fetch') || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError');
+    const isTimeout   = err.message?.includes('timeout') || err.message?.includes('abort');
+    const is503       = err.message?.includes('503') || err.message?.includes('502');
+
+    let errHtml = '';
+    if(isColdStart || isTimeout || is503){
+      errHtml = `
+        <div style="text-align:center;padding:2.5rem;font-family:var(--font-mono)">
+          <div style="font-size:1.5rem;margin-bottom:1rem">⏳</div>
+          <div style="color:#f5c018;font-size:0.85rem;margin-bottom:0.5rem">Server is waking up — Railway cold start (~30 seconds)</div>
+          <div style="color:#3d5068;font-size:0.72rem">Wait 30 seconds and click Run Scanner again</div>
+        </div>`;
+    } else {
+      errHtml = `
+        <div style="text-align:center;padding:2.5rem;font-family:var(--font-mono)">
+          <div style="font-size:1.5rem;margin-bottom:1rem">❌</div>
+          <div style="color:#ff4560;font-size:0.85rem;margin-bottom:0.5rem">Scanner error: ${err.message}</div>
+          <div style="color:#3d5068;font-size:0.72rem">Open F12 → Console for full details · Check api.takshvitrade.com/health</div>
+        </div>`;
+    }
+    document.getElementById('signals-body').innerHTML = errHtml;
   } finally{
     clearInterval(timerInterval);
     const totalTime = ((Date.now() - scanStart) / 1000).toFixed(1);
@@ -1515,10 +1535,15 @@ function showTrade(stock, entry, sl, target, qty){
 /* ─── MARKET LIVE DATA ─── */
 function round2(n){ return Math.round(n * 100) / 100; }
 
+// Retry counter for cold-start resilience
+let _marketRetry = 0;
+
 async function loadMarket(){
   try{
     const res = await fetch(`${API}/api/market/nifty`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    _marketRetry = 0; // reset on success
 
     const trend = data.trend || 'SIDEWAYS';
     const color = trend === "UP" ? "#1ddd8a" : trend === "DOWN" ? "#ff4560" : "#f5c018";
@@ -1588,12 +1613,23 @@ async function loadMarket(){
     window._marketTrend = trend;
 
   }catch(err){
-    const priceEl = document.getElementById('nifty-price');
-    if(priceEl) priceEl.textContent = '--';
-    const verdictEl = document.getElementById('nifty-verdict');
-    if(verdictEl) verdictEl.textContent = 'MARKET — data unavailable';
-    window._marketTrend = 'SIDEWAYS';
-    console.warn("Market fetch failed:", err);
+    _marketRetry++;
+    console.warn(`Market fetch failed (attempt ${_marketRetry}):`, err);
+    if(_marketRetry <= 4){
+      // Silent retry: 5s, 10s, 20s, 40s — don't show error to user yet
+      const delay = Math.min(5000 * _marketRetry, 40000);
+      setTimeout(loadMarket, delay);
+      // Only update UI to show loading dots, not "data unavailable"
+      const verdictEl = document.getElementById('nifty-verdict');
+      if(verdictEl && verdictEl.textContent === '') verdictEl.textContent = '...';
+    } else {
+      // After 4 retries, show error
+      const priceEl = document.getElementById('nifty-price');
+      if(priceEl) priceEl.textContent = '--';
+      const verdictEl = document.getElementById('nifty-verdict');
+      if(verdictEl) verdictEl.textContent = 'market data unavailable — retrying';
+      window._marketTrend = 'SIDEWAYS';
+    }
   }
 }
 

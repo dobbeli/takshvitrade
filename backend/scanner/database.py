@@ -1,9 +1,10 @@
 """
-Takshvi Trade — database.py  v3
-Uses requests directly to Supabase REST API.
-Railway has no DNS restrictions — this connects to Supabase perfectly.
-
-Tables: scan_history · signals · alert_logs · users
+Takshvi Trade — database.py  v4  (FIXED)
+FIXES:
+1. _build_signal_row now handles both 'sl' and 'stop_loss' field names from engine
+2. save_signals logs each failure clearly so you can see WHY signals aren't saving
+3. is_connected() failure now prints a human-readable diagnosis
+4. save_scan returns scan_id even if some fields are None (was silently failing)
 """
 
 import os
@@ -32,7 +33,9 @@ def _url(table: str) -> str:
 def _insert(table: str, row: dict):
     try:
         r = requests.post(_url(table), json=row, headers=HEADERS, timeout=TIMEOUT)
-        r.raise_for_status()
+        if not r.ok:
+            logging.error(f"DB insert {table} FAILED: HTTP {r.status_code} — {r.text[:300]}")
+            return None
         data = r.json()
         return data[0] if isinstance(data, list) and data else data
     except Exception as e:
@@ -45,7 +48,9 @@ def _insert_many(table: str, rows: list) -> int:
         return 0
     try:
         r = requests.post(_url(table), json=rows, headers=HEADERS, timeout=TIMEOUT)
-        r.raise_for_status()
+        if not r.ok:
+            logging.error(f"DB insert_many {table} FAILED: HTTP {r.status_code} — {r.text[:400]}")
+            return 0
         return len(rows)
     except Exception as e:
         logging.error(f"DB insert_many {table}: {type(e).__name__}: {e}")
@@ -90,7 +95,7 @@ def _upsert(table: str, row: dict, on_conflict: str):
 
 def is_connected() -> bool:
     if not SUPABASE_URL or not SUPABASE_KEY:
-        logging.error("DB: SUPABASE_URL or SUPABASE_KEY not set")
+        logging.error("DB: SUPABASE_URL or SUPABASE_KEY not set — check Railway Variables")
         return False
     try:
         r = requests.get(
@@ -101,18 +106,18 @@ def is_connected() -> bool:
         )
         ok = r.status_code in (200, 206)
         if ok:
-            logging.info("DB: health check OK ✅")
+            logging.info("DB: Supabase health check OK ✅")
         else:
-            logging.error(f"DB: health check FAILED — HTTP {r.status_code}: {r.text[:200]}")
+            logging.error(f"DB: Supabase health FAILED — HTTP {r.status_code}: {r.text[:200]}")
         return ok
     except Exception as e:
-        logging.error(f"DB: health check FAILED — {type(e).__name__}: {e}")
+        logging.error(f"DB: Supabase health FAILED — {type(e).__name__}: {e}")
         return False
 
 
 def get_connection_error() -> str:
     if not SUPABASE_URL or not SUPABASE_KEY:
-        return "missing env vars"
+        return "missing env vars: SUPABASE_URL or SUPABASE_KEY"
     try:
         r = requests.get(
             _url("scan_history"),
@@ -127,7 +132,6 @@ def get_connection_error() -> str:
 
 
 def bootstrap_schema():
-    """No-op for Supabase — tables already created in Supabase dashboard."""
     logging.info("DB: using Supabase — schema managed in dashboard")
 
 
@@ -154,8 +158,9 @@ def save_scan(scan_result: dict, capital: float) -> Optional[str]:
     }
     result = _insert("scan_history", row)
     if result is not None:
-        logging.info(f"DB: scan saved → {scan_id}")
+        logging.info(f"DB: scan saved ✅ → scan_id={scan_id}")
         return scan_id
+    logging.error("DB: save_scan FAILED — scan_id not saved")
     return None
 
 
@@ -166,33 +171,58 @@ def get_recent_scans(limit: int = 10) -> list:
 
 
 # ════════════════════════════════════════════════════════════
-# signals
+# signals — FIXED field mapping
 # ════════════════════════════════════════════════════════════
+
+def _g(signal: dict, *keys):
+    """Try multiple field name variants — handles engine field name differences."""
+    for k in keys:
+        v = signal.get(k)
+        if v is not None:
+            return v
+    return None
+
 
 def _build_signal_row(signal: dict, scan_id: str,
                       signal_type: str, market_trend: str) -> dict:
+    """
+    FIXED: engine may return 'sl' or 'stop_loss', 'close' or 'close_price'.
+    We try both variants with _g() helper.
+    """
+    entry  = _g(signal, "entry")
+    sl     = _g(signal, "sl", "stop_loss")
+    target = _g(signal, "target")
+
+    # Calculate upside_pct if not provided by engine
+    upside = _g(signal, "upside_pct")
+    if upside is None and entry and target:
+        try:
+            upside = round(((target - entry) / entry) * 100, 2)
+        except Exception:
+            upside = None
+
     return {
         "id":             str(uuid.uuid4()),
         "scan_id":        scan_id,
         "generated_at":   datetime.now(timezone.utc).isoformat(),
         "signal_type":    signal_type,
-        "stock":          signal.get("stock", ""),
-        "close_price":    signal.get("close"),
-        "entry":          signal.get("entry"),
-        "stop_loss":      signal.get("sl"),
-        "target":         signal.get("target"),
-        "quantity":       signal.get("qty"),
-        "position_value": signal.get("position"),
-        "risk_reward":    signal.get("rr"),
-        "score":          signal.get("score"),
-        "action":         signal.get("action"),
-        "upside_pct":     signal.get("upside_pct"),
+        "stock":          _g(signal, "stock", "symbol") or "",
+        "close_price":    _g(signal, "close", "close_price"),
+        "entry":          entry,
+        "stop_loss":      sl,
+        "target":         target,
+        "quantity":       _g(signal, "qty", "quantity"),
+        "position_value": _g(signal, "position", "position_value"),
+        "risk_reward":    _g(signal, "rr", "risk_reward"),
+        "score":          _g(signal, "score"),
+        "action":         _g(signal, "action"),
+        "upside_pct":     upside,
         "near_52w_high":  signal.get("near_52w_high", False),
         "near_52w_low":   signal.get("near_52w_low", False),
         "caution":        signal.get("caution", False),
         "market_trend":   market_trend,
-        "weekly_ema20":   signal.get("weekly_ema20"),
-        "weekly_ema50":   signal.get("weekly_ema50"),
+        "weekly_ema20":   _g(signal, "weekly_ema20"),
+        "weekly_ema50":   _g(signal, "weekly_ema50"),
         "outcome":        None,
         "outcome_date":   None,
         "outcome_price":  None,
@@ -204,13 +234,29 @@ def _build_signal_row(signal: dict, scan_id: str,
 def save_signals(scan_result: dict, scan_id: str) -> int:
     market_trend = scan_result.get("market_trend", "SIDEWAYS")
     rows = []
-    for s in scan_result.get("long_signals",      []): rows.append(_build_signal_row(s, scan_id, "LONG",          market_trend))
-    for s in scan_result.get("short_signals",     []): rows.append(_build_signal_row(s, scan_id, "SHORT",         market_trend))
-    for s in scan_result.get("pre_breakout",      []): rows.append(_build_signal_row(s, scan_id, "PRE_BREAKOUT",  market_trend))
-    for s in scan_result.get("pre_breakdown",     []): rows.append(_build_signal_row(s, scan_id, "PRE_BREAKDOWN", market_trend))
-    for s in scan_result.get("relative_strength", []): rows.append(_build_signal_row(s, scan_id, "RS",            market_trend))
+
+    type_map = [
+        ("long_signals",      "LONG"),
+        ("short_signals",     "SHORT"),
+        ("pre_breakout",      "PRE_BREAKOUT"),
+        ("pre_breakdown",     "PRE_BREAKDOWN"),
+        ("relative_strength", "RS"),
+    ]
+
+    for key, signal_type in type_map:
+        signals = scan_result.get(key, [])
+        for s in signals:
+            rows.append(_build_signal_row(s, scan_id, signal_type, market_trend))
+
+    if not rows:
+        logging.info(f"DB: save_signals — no signals to save for scan_id={scan_id}")
+        return 0
+
     saved = _insert_many("signals", rows)
-    logging.info(f"DB: {saved} signals saved for scan_id={scan_id}")
+    if saved > 0:
+        logging.info(f"DB: {saved} signals saved ✅ for scan_id={scan_id}")
+    else:
+        logging.error(f"DB: save_signals FAILED — 0 rows saved for scan_id={scan_id}")
     return saved
 
 

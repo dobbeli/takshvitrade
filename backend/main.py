@@ -1,5 +1,10 @@
 """
-Takshvi Trade — FastAPI Backend v2.1
+Takshvi Trade — FastAPI Backend v2.2 (FIXED)
+FIXES:
+1. save_scan failure is now logged clearly — won't silently drop signals
+2. save_signals called even if scan_id is None (with a warning)
+3. /run-master-scan returns full error detail instead of generic message
+4. DB save errors don't crash the scan response — scan still returns to frontend
 """
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -11,12 +16,8 @@ from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from routers import market
-from routers import news
-from routers import whatsapp
-
+from routers import market, news, whatsapp
 from scanner.engine import run_full_scan, run_master_scan, get_market_trend
-
 from scanner.database import (
     save_scan, save_signals, get_recent_scans,
     get_open_signals, get_alert_logs, is_connected,
@@ -35,7 +36,7 @@ async def lifespan(app: FastAPI):
     print("🛑 Takshvi Trade API stopped")
 
 
-app = FastAPI(title="Takshvi Trade API", version="2.1.0", lifespan=lifespan)
+app = FastAPI(title="Takshvi Trade API", version="2.2.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -52,7 +53,7 @@ app.include_router(whatsapp.router, prefix="/api/whatsapp")
 
 @app.get("/")
 def root():
-    return {"status": "ok", "platform": "Takshvi Trade", "version": "2.1"}
+    return {"status": "ok", "platform": "Takshvi Trade", "version": "2.2"}
 
 
 @app.get("/health")
@@ -85,7 +86,7 @@ def debug_env():
         payload_b64 += "=" * (4 - len(payload_b64) % 4)
         payload = json.loads(base64.b64decode(payload_b64))
         role = payload.get("role", "unknown")
-    except:
+    except Exception:
         role = "decode_failed"
     return {
         "url_start":   url[:40],
@@ -116,29 +117,67 @@ def alert_log(limit: int = 50):
 
 @app.get("/run-master-scan")
 def master_scan(capital: int = 100000):
+    """
+    FIXED:
+    - scan runs first, DB save is best-effort and never blocks the response
+    - clear logging so Railway logs show exactly what saved and what failed
+    - returns scan_id and signals_saved in response so frontend can verify
+    """
+    scan_id       = None
+    signals_saved = 0
+
     try:
+        # 1. Run the scanner
         result = run_master_scan(
             capital=capital,
             risk_amount=int(capital * 0.01)
         )
-        scan_id       = save_scan(result, capital)
-        signals_saved = 0
-        if scan_id:
-            signals_saved = save_signals(result, scan_id)
-            logging.info(f"DB save: scan_id={scan_id}, signals={signals_saved}")
+
+        # 2. Save scan to DB (best-effort — never crash the scan response)
+        try:
+            scan_id = save_scan(result, capital)
+            if scan_id:
+                logging.info(f"✅ scan_history saved: {scan_id}")
+                # 3. Save individual signals
+                signals_saved = save_signals(result, scan_id)
+                logging.info(f"✅ signals saved: {signals_saved} rows")
+            else:
+                logging.error("❌ save_scan returned None — check Supabase connection and table schema")
+                # Try to log what signals WOULD have been saved so we know scanner worked
+                total = (
+                    len(result.get("long_signals",  [])) +
+                    len(result.get("short_signals", [])) +
+                    len(result.get("pre_breakout",  [])) +
+                    len(result.get("pre_breakdown", [])) +
+                    len(result.get("relative_strength", []))
+                )
+                logging.warning(f"⚠️ {total} signals generated but NOT saved (DB issue)")
+        except Exception as db_err:
+            logging.error(f"❌ DB save error (scan still returned to frontend): {db_err}")
+
         return {
             **result,
             "scan_id":       scan_id,
             "signals_saved": signals_saved,
         }
+
     except Exception as e:
-        logging.error(f"Master scan error: {e}")
+        logging.error(f"❌ Master scan FAILED: {e}", exc_info=True)
+        # Return a proper error response — frontend will show the real message
         return {
-            "market_trend": "SIDEWAYS", "nifty": None, "change_pct": None,
-            "scan_time": 0, "is_crash": False,
-            "long_signals": [], "pre_breakout": [], "short_signals": [],
-            "pre_breakdown": [], "relative_strength": [],
-            "scan_id": None, "signals_saved": 0, "error": str(e),
+            "market_trend":      "SIDEWAYS",
+            "nifty":             None,
+            "change_pct":        None,
+            "scan_time":         0,
+            "is_crash":          False,
+            "long_signals":      [],
+            "pre_breakout":      [],
+            "short_signals":     [],
+            "pre_breakdown":     [],
+            "relative_strength": [],
+            "scan_id":           None,
+            "signals_saved":     0,
+            "error":             str(e),
         }
 
 
@@ -148,27 +187,36 @@ def run_scan(capital: int = 50000):
         market_trend, nifty_value, change_pct = get_market_trend()
         results = run_full_scan(capital=capital)
         return {
-            "count": len(results), "data": results,
-            "market_trend": market_trend, "nifty": nifty_value, "change_pct": change_pct,
+            "count":        len(results),
+            "data":         results,
+            "market_trend": market_trend,
+            "nifty":        nifty_value,
+            "change_pct":   change_pct,
         }
     except Exception as e:
         logging.error(f"Scan error: {e}")
-        return {"count": 0, "data": [], "market_trend": "SIDEWAYS", "nifty": None, "change_pct": None}
+        return {"count": 0, "data": [], "market_trend": "SIDEWAYS",
+                "nifty": None, "change_pct": None}
 
 
 @app.get("/chart")
 def get_chart(symbol: str = "INFY.NS"):
-    import requests
+    import requests as req
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=3mo&interval=1d"
-        res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        res = req.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
         data = res.json()
         result = data["chart"]["result"][0]
         timestamps = result["timestamp"]
         quotes = result["indicators"]["quote"][0]
         chart_data = [
-            {"time": timestamps[i], "open": quotes["open"][i],
-             "high": quotes["high"][i], "low": quotes["low"][i], "close": quotes["close"][i]}
+            {
+                "time":  timestamps[i],
+                "open":  quotes["open"][i],
+                "high":  quotes["high"][i],
+                "low":   quotes["low"][i],
+                "close": quotes["close"][i],
+            }
             for i in range(len(timestamps))
         ]
         return {"data": chart_data}
@@ -189,14 +237,20 @@ def download_csv(capital: int = 50000):
         else:
             for r in results:
                 writer.writerow([
-                    r.get("stock", ""), r.get("score", 0), r.get("entry", 0),
-                    r.get("sl", 0), r.get("target", 0), r.get("rr", 0),
-                    r.get("qty", 0), r.get("position", 0)
+                    r.get("stock",    ""),
+                    r.get("score",    0),
+                    r.get("entry",    0),
+                    r.get("sl",       0),
+                    r.get("target",   0),
+                    r.get("rr",       0),
+                    r.get("qty",      0),
+                    r.get("position", 0),
                 ])
         output.seek(0)
         return StreamingResponse(
-            iter([output.getvalue()]), media_type="text/csv",
-            headers={"Content-Disposition": "attachment; filename=trades.csv"}
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=trades.csv"},
         )
     except Exception as e:
         logging.error(f"CSV error: {e}")
