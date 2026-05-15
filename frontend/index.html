@@ -849,7 +849,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   <!-- 🔥 THEN TOP STORIES -->
   <h2 style="margin:30px 0 10px 0;">Top stories</h2>
 
-  <div id="news-container" style="display:flex;flex-direction:column;gap:0;"></div>
+  <div id="news-container" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;padding:0 0 2rem 0;"></div>
 </div>
 
 <script>
@@ -986,13 +986,16 @@ async function loadNews(){
     }
 
     // ── Recommendation — combine market trend + news verdict ──
+    // IMPORTANT: _marketTrend may not be loaded yet if news tab clicked first.
+    // Default to SIDEWAYS (neutral), never assume DOWN/BEARISH without confirmed data.
     const marketTrend = window._marketTrend || 'SIDEWAYS';
     const newsLabel   = (apiVerdict === 'POSITIVE' || apiVerdict === 'BULLISH') ? 'BULLISH'
                       : (apiVerdict === 'NEGATIVE' || apiVerdict === 'BEARISH') ? 'BEARISH' : 'MIXED';
     const recEl = document.getElementById('news-recommendation');
     if(recEl){
+      // Only show BEARISH block warning if market trend is CONFIRMED DOWN
       if(marketTrend === "DOWN"){
-        recEl.textContent = "⚠️ Market is BEARISH — no new trades. Scanner is blocked.";
+        recEl.textContent = "⚠️ Market is BEARISH — trade cautiously, reduce position sizes.";
         recEl.style.color = "#ff4560";
       } else if(newsLabel === "BULLISH" && marketTrend === "UP"){
         recEl.textContent = "✅ News + Market both BULLISH — good trading environment today.";
@@ -1000,44 +1003,41 @@ async function loadNews(){
       } else if(newsLabel === "BEARISH" && marketTrend === "UP"){
         recEl.textContent = "⚠️ Market UP but news BEARISH — trade smallest size, tighten stops.";
         recEl.style.color = "#f5c018";
+      } else if(newsLabel === "BULLISH"){
+        recEl.textContent = "✅ News sentiment BULLISH — watch for confirmation from Nifty.";
+        recEl.style.color = "#1ddd8a";
       } else {
         recEl.textContent = verdictText || "📊 Mixed signals — trade only highest-score setups (80+).";
         recEl.style.color = "#f5c018";
       }
     }
 
-    // ── Render news cards ──
+    // ── Render news cards — 4-column grid ──
     container.innerHTML = "";
+    // Reset container to grid (in case it was changed)
+    container.style.display = "grid";
+    container.style.gridTemplateColumns = "repeat(auto-fit, minmax(280px, 1fr))";
+    container.style.gap = "16px";
 
     if(!data.news || data.news.length === 0){
-      container.innerHTML = `<div style="color:gold;padding:1rem">No news available right now. Try again in a few minutes.</div>`;
+      container.innerHTML = `<div style="color:gold;padding:1rem;grid-column:1/-1">No news available right now. Try again in a few minutes.</div>`;
       newsLoaded = true;
       return;
     }
 
-    // Switch container to list layout (cards were too wide/broken on grid)
-    container.style.display      = "flex";
-    container.style.flexDirection= "column";
-    container.style.gap          = "0";
-
     data.news.forEach(n => {
       const div = document.createElement("div");
-      div.style.cssText = `
-        padding:14px 16px;
-        border-bottom:1px solid #1e2836;
-        cursor:pointer;
-        transition:background 0.15s ease;
-      `;
-      div.onmouseover = () => { div.style.background = "rgba(0,229,200,0.04)"; };
-      div.onmouseout  = () => { div.style.background = "transparent"; };
+      div.className = "news-card";
       div.innerHTML = `
-        <div style="font-size:11px;color:#5a7a96;margin-bottom:5px;font-family:var(--font-mono);letter-spacing:0.05em">
+        <div style="font-size:11px;color:#5a7a96;margin-bottom:8px;font-family:var(--font-mono);letter-spacing:0.04em">
           ${formatTime(n.time)} &nbsp;·&nbsp; ${n.source || ''}
         </div>
-        <div style="font-size:14px;color:#e8f0f8;line-height:1.55;font-weight:500">
+        <div style="font-size:14px;color:#e8f0f8;line-height:1.6;font-weight:500">
           ${n.title || ''}
         </div>
       `;
+      div.onmouseover = () => { div.style.borderColor = "rgba(0,229,200,0.35)"; div.style.background = "#111820"; };
+      div.onmouseout  = () => { div.style.borderColor = "#1e2836"; div.style.background = "#0d1117"; };
       div.onclick = () => window.open(n.link, "_blank");
       container.appendChild(div);
     });
