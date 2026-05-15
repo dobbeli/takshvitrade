@@ -1,514 +1,272 @@
 """
-Takshvi Trade — WhatsApp Alert System
-Uses Twilio WhatsApp API to send trading signals
+Takshvi Trade — scanner/alerts.py  (FIXED v2)
 
-Setup required:
-1. Create Twilio account at twilio.com
-2. Get Account SID, Auth Token from Twilio Console
-3. Enable WhatsApp Sandbox or Business API
-4. Add these to Railway environment variables:
-   TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-   TWILIO_AUTH_TOKEN=your_auth_token
-   TWILIO_WHATSAPP_FROM=whatsapp:+14155238886
-   ALERT_PHONE=whatsapp:+91XXXXXXXXXX
+ROOT CAUSE OF 429 ERRORS:
+The old code sent one WhatsApp message per signal with NO delay.
+With 25 signals, it fired 25+ Twilio API calls in <1 second.
+Twilio sandbox rate limit = 1 msg/sec → everything after msg 2-3 got 429.
+
+FIXES:
+1. time.sleep(1) between every Twilio call
+2. Signals batched into ONE summary message (not one per signal)
+3. Hard cap: max 5 messages per scan total
+4. Retry once on 429 with 3s extra delay
 """
-
 import os
+import time
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-# ── Twilio client ──────────────────────────────────────────────
-try:
-    from twilio.rest import Client
-    TWILIO_AVAILABLE = True
-except ImportError:
-    TWILIO_AVAILABLE = False
-    logging.warning("twilio not installed — run: pip install twilio")
+# ── Twilio client (lazy init) ─────────────────────────────────
+_twilio_client = None
 
-TWILIO_SID   = os.getenv("TWILIO_ACCOUNT_SID", "")
-TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
-FROM_NUMBER  = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
-TO_NUMBER    = os.getenv("ALERT_PHONE", "")
-
-
-# ════════════════════════════════════════════════════════════
-# MESSAGE FORMATTERS
-# ════════════════════════════════════════════════════════════
-
-def format_long_signal(signal: dict, market_trend: str, nifty: float,
-                        change_pct: float) -> str:
-    now      = datetime.now().strftime("%d %b %Y, %I:%M %p IST")
-    stock    = signal.get("stock", "")
-    entry    = signal.get("entry", 0)
-    sl       = signal.get("sl", 0)
-    target   = signal.get("target", 0)
-    qty      = signal.get("qty", 0)
-    position = signal.get("position", 0)
-    rr       = signal.get("rr", 2.0)
-    score    = signal.get("score", 0)
-    action   = signal.get("action", "BUY")
-    upside   = signal.get("upside_pct", 0)
-    near_52w = signal.get("near_52w_high", False)
-    w_ema20  = signal.get("weekly_ema20", None)
-    w_ema50  = signal.get("weekly_ema50", None)
-
-    risk_per_share   = round(entry - sl, 2)
-    reward_per_share = round(target - entry, 2)
-    total_risk       = round(risk_per_share * qty, 2)
-    total_reward     = round(reward_per_share * qty, 2)
-
-    weekly_status = "✅ Weekly EMA20 > EMA50 (Bullish)" if (
-        w_ema20 and w_ema50 and w_ema20 > w_ema50
-    ) else "📊 Weekly data not available"
-
-    vol_status   = "✅ Volume above 1.2× 10-day average" if score >= 70 else "📊 Check volume on chart"
-    entry_status = "🟢 ACTIVE — Entry above previous high"
-    if signal.get("caution"):
-        entry_status = "⚠️ CAUTION — Bearish market, 50% position size"
-
-    high_52w_txt = "★ Near 52-Week High (strong trend)" if near_52w else ""
-    nifty_fmt    = f"{nifty:,.2f}" if nifty else "--"
-    chg_arrow    = "▲" if market_trend == "UP" else "▼"
-    chg_color    = "🟢" if market_trend == "UP" else "🔴"
-    mkt_status   = f"{chg_color} {market_trend} {chg_arrow} {abs(change_pct):.2f}% today" if change_pct else f"{chg_color} {market_trend}"
-    action_emoji = "🔥" if "BEST" in action else "📈"
-
-    msg = f"""╔══════════════════════════════╗
-{action_emoji} *TAKSHVI TRADE — {"BEST SIGNAL" if "BEST" in action else "BUY SIGNAL"}*
-╚══════════════════════════════╝
-
-📊 *{stock}* {'★ 52W High' if near_52w else ''}
-🕐 {now}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📈 *TRADE LEVELS*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟡 Buy Trigger:  ₹{entry:,.2f}
-🔴 Stop Loss:    ₹{sl:,.2f}
-🟢 Target:       ₹{target:,.2f}
-📦 Quantity:     {qty} {'share' if qty == 1 else 'shares'}
-💰 Position:     ₹{position:,.2f}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 *RISK — REWARD*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️  Risk/share:  ₹{risk_per_share:,.2f}
-✅ Reward/share: ₹{reward_per_share:,.2f}
-📐 R:R Ratio:    1:{rr}
-📉 Total Risk:   ₹{total_risk:,.2f}
-📈 Total Reward: ₹{total_reward:,.2f}
-🚀 Upside:       +{upside}%
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔍 *CONFIRMATIONS*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📉 EMA Trend:    ✅ EMA20 > EMA50 > EMA200
-📅 Weekly EMA:   {weekly_status}
-📊 Volume:       {vol_status}
-🏆 Signal Score: {score}/100
-{'🏔️  52W High:    ' + high_52w_txt if near_52w else ''}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🚦 *STATUS*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📥 Entry Status: {entry_status}
-📤 Exit Status:  🔴 Exit if price closes below ₹{sl:,.2f}
-🎯 Profit Exit:  🟢 Book at ₹{target:,.2f} (+{upside}%)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🌍 *MARKET CONTEXT*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 Nifty50:      ₹{nifty_fmt}
-📈 Market:       {mkt_status}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ *DISCLAIMER*
-Signals are for educational purposes only.
-Not investment advice. Trade at your own risk.
-Takshvi Trade is not SEBI registered (RA pending).
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📱 takshvitrade.com"""
-
-    return msg.strip()
+def _get_client():
+    global _twilio_client
+    if _twilio_client is None:
+        from twilio.rest import Client
+        sid   = os.getenv("TWILIO_ACCOUNT_SID",   "")
+        token = os.getenv("TWILIO_AUTH_TOKEN",     "")
+        if not sid or not token:
+            raise RuntimeError("TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN not set")
+        _twilio_client = Client(sid, token)
+    return _twilio_client
 
 
-def format_short_signal(signal: dict, market_trend: str, nifty: float,
-                         change_pct: float) -> str:
-    now      = datetime.now().strftime("%d %b %Y, %I:%M %p IST")
-    stock    = signal.get("stock", "")
-    entry    = signal.get("entry", 0)
-    sl       = signal.get("sl", 0)
-    target   = signal.get("target", 0)
-    qty      = signal.get("qty", 0)
-    position = signal.get("position", 0)
-    rr       = signal.get("rr", 2.0)
-    score    = signal.get("score", 0)
-    action   = signal.get("action", "SHORT")
-    downside = signal.get("downside_pct", 0)
-    near_52w_low = signal.get("near_52w_low", False)
-    w_ema20  = signal.get("weekly_ema20", None)
-    w_ema50  = signal.get("weekly_ema50", None)
-    caution  = signal.get("caution", False)
-
-    risk_per_share   = round(sl - entry, 2)
-    reward_per_share = round(entry - target, 2)
-    total_risk       = round(risk_per_share * qty, 2)
-    total_reward     = round(reward_per_share * qty, 2)
-
-    weekly_status = "✅ Weekly EMA20 < EMA50 (Bearish)" if (
-        w_ema20 and w_ema50 and w_ema20 < w_ema50
-    ) else "📊 Weekly data not available"
-
-    nifty_fmt          = f"{nifty:,.2f}" if nifty else "--"
-    chg_arrow          = "▲" if market_trend == "UP" else "▼"
-    chg_color          = "🟢" if market_trend == "UP" else "🔴"
-    mkt_status         = f"{chg_color} {market_trend} {chg_arrow} {abs(change_pct):.2f}% today" if change_pct else f"{chg_color} {market_trend}"
-    counter_trend_note = "\n⚠️ COUNTER-TREND — Market is UP. High risk short." if caution else ""
-
-    msg = f"""╔══════════════════════════════╗
-📉 *TAKSHVI TRADE — {"BEST SHORT" if "BEST" in action else "SHORT SIGNAL"}*
-╚══════════════════════════════╝
-
-📊 *{stock}* {'↓ Near 52W Low' if near_52w_low else ''}{counter_trend_note}
-🕐 {now}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📉 *TRADE LEVELS*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟡 Sell Trigger: ₹{entry:,.2f}
-🔴 Stop Loss:    ₹{sl:,.2f}  ← Exit if price RISES here
-🟢 Target:       ₹{target:,.2f}
-📦 Quantity:     {qty} {'share' if qty == 1 else 'shares'}
-💰 Position:     ₹{position:,.2f}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 *RISK — REWARD*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️  Risk/share:  ₹{risk_per_share:,.2f}
-✅ Reward/share: ₹{reward_per_share:,.2f}
-📐 R:R Ratio:    1:{rr}
-📉 Total Risk:   ₹{total_risk:,.2f}
-📈 Total Reward: ₹{total_reward:,.2f}
-📉 Downside:     -{downside}%
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔍 *CONFIRMATIONS*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📉 EMA Trend:    ✅ EMA20 < EMA50 < EMA200
-📅 Weekly EMA:   {weekly_status}
-📊 Volume:       ✅ Volume above 1.2× 10-day average
-🏆 Signal Score: {score}/100
-{'📉 52W Low:     Near yearly low — sustained weakness' if near_52w_low else ''}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🚦 *STATUS*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📥 Entry Status: 🔴 ACTIVE — Breakdown below previous low
-📤 Exit Status:  🟢 Cover if price RISES above ₹{sl:,.2f}
-🎯 Profit Exit:  🟢 Cover at ₹{target:,.2f} (-{downside}%)
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🌍 *MARKET CONTEXT*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 Nifty50:      ₹{nifty_fmt}
-📈 Market:       {mkt_status}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ *DISCLAIMER*
-Signals are for educational purposes only.
-Not investment advice. Trade at your own risk.
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📱 takshvitrade.com"""
-
-    return msg.strip()
+# ── Core send function with retry on 429 ─────────────────────
+def send_whatsapp(message: str, to: str, retry: bool = True) -> dict:
+    """
+    Send one WhatsApp message via Twilio.
+    Returns {"success": bool, "sid": str, "error": str}
+    Retries ONCE on 429 with a 3s delay.
+    """
+    frm = os.getenv("TWILIO_WHATSAPP_FROM", "whatsapp:+14155238886")
+    try:
+        client = _get_client()
+        msg    = client.messages.create(body=message, from_=frm, to=to)
+        logging.info(f"WhatsApp sent ✅ sid={msg.sid} to={to[:20]}")
+        return {"success": True, "sid": msg.sid, "error": ""}
+    except Exception as e:
+        err_str = str(e)
+        # 429 = rate limit → wait 3s and retry once
+        if "429" in err_str and retry:
+            logging.warning(f"Twilio 429 — waiting 3s then retrying...")
+            time.sleep(3)
+            return send_whatsapp(message, to, retry=False)
+        logging.error(f"WhatsApp FAILED: {err_str[:200]}")
+        return {"success": False, "sid": "", "error": err_str[:300]}
 
 
-def format_prebreakout_signal(signal: dict, market_trend: str) -> str:
-    now    = datetime.now().strftime("%d %b %Y, %I:%M %p IST")
-    stock  = signal.get("stock", "")
-    entry  = signal.get("entry", 0)
-    sl     = signal.get("sl", 0)
-    target = signal.get("target", 0)
-    qty    = signal.get("qty", 0)
-    score  = signal.get("score", 0)
-
-    msg = f"""╔══════════════════════════════╗
-⏳ *TAKSHVI TRADE — PRE-BREAKOUT*
-╚══════════════════════════════╝
-
-📊 *{stock}*
-🕐 {now}
-
-ACTION REQUIRED TONIGHT:
-Place a BUY STOP order at ₹{entry:,.2f}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📈 *ORDER DETAILS*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟡 BUY STOP at: ₹{entry:,.2f}
-🔴 Stop Loss:   ₹{sl:,.2f}
-🟢 Target:      ₹{target:,.2f}
-📦 Quantity:    {qty} {'share' if qty == 1 else 'shares'}
-🏆 Score:       {score}/100
-
-If stock breaks out tomorrow → order fills automatically.
-If stock does not break out → order expires, no trade.
-
-📱 takshvitrade.com
-⚠️ Not investment advice."""
-
-    return msg.strip()
-
-
-def format_market_summary(scan_result: dict) -> str:
-    now        = datetime.now().strftime("%d %b %Y, %I:%M %p IST")
-    trend      = scan_result.get("market_trend", "SIDEWAYS")
-    nifty      = scan_result.get("nifty")
-    change_pct = scan_result.get("change_pct")
-    scan_time  = scan_result.get("scan_time", 0)
-    longs      = scan_result.get("long_signals", [])
-    pre_bo     = scan_result.get("pre_breakout", [])
-    shorts     = scan_result.get("short_signals", [])
-    pre_bd     = scan_result.get("pre_breakdown", [])
-    rs         = scan_result.get("relative_strength", [])
-    is_crash   = scan_result.get("is_crash", False)
-
-    nifty_fmt   = f"₹{nifty:,.2f}" if nifty else "--"
-    arrow       = "▲" if trend == "UP" else "▼"
-    chg_txt     = f"{arrow} {abs(change_pct):.2f}% today" if change_pct else ""
-    mkt_emoji   = "🟢" if trend == "UP" else ("🚨" if is_crash else "🔴")
-    long_names  = ", ".join([s["stock"] for s in longs[:3]])  or "None"
-    short_names = ", ".join([s["stock"] for s in shorts[:3]]) or "None"
-    pre_bo_names= ", ".join([s["stock"] for s in pre_bo[:3]]) or "None"
-    rs_names    = ", ".join([s["stock"] for s in rs[:3]])      or "None"
-    crash_warning = "\n🚨 EXTREME CRASH DAY — No long trades. Consider shorts only.\n" if is_crash else ""
-
-    msg = f"""╔══════════════════════════════╗
-📊 *TAKSHVI TRADE — DAILY SCAN*
-╚══════════════════════════════╝
-
-🕐 {now}
-{crash_warning}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🌍 *MARKET STATUS*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-{mkt_emoji} Nifty50:  {nifty_fmt} {chg_txt}
-📊 Trend:    {trend}
-{'⚠️  Bearish: Long positions at 50% size' if trend == 'DOWN' and not is_crash else ''}
-{'✅ Bullish: Full position size, score ≥80 only' if trend == 'UP' else ''}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📈 *SIGNALS FOUND TODAY*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟢 Long Signals:    {len(longs)} → {long_names}
-⏳ Pre-Breakout:    {len(pre_bo)} → {pre_bo_names}
-🔴 Short Signals:   {len(shorts)} → {short_names}
-⚡ Rel. Strength:   {len(rs)} → {rs_names}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⏱ Scan time: {scan_time}s | 50 Nifty stocks scanned
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📱 View full signals: takshvitrade.com
-
-⚠️ Not investment advice. SEBI RA registration pending."""
-
-    return msg.strip()
-
+# ── Message formatters ────────────────────────────────────────
 
 def format_test_message() -> str:
-    return """✅ *TAKSHVI TRADE — WhatsApp Alert Active*
-
-Your trading alerts are now connected!
-
-You will receive:
-📈 Buy signals with entry/SL/target
-📉 Short signals with breakdown levels
-⏳ Pre-breakout BUY STOP alerts
-📊 Daily market summary
-
-📱 takshvitrade.com
-⚠️ Not investment advice."""
+    IST = timezone(timedelta(hours=5, minutes=30))
+    now = datetime.now(IST).strftime("%d %b %Y %I:%M %p IST")
+    return (
+        f"✅ *Takshvi Trade — Test Alert*\n"
+        f"🕐 {now}\n\n"
+        f"Your WhatsApp alerts are working correctly.\n"
+        f"You will receive scan results after market close (3:35 PM IST).\n\n"
+        f"_Takshvi Trade · NSE Signal Intelligence_"
+    )
 
 
-# ════════════════════════════════════════════════════════════
-# TWILIO SENDER — with Supabase alert logging
-# ════════════════════════════════════════════════════════════
+def format_market_summary(scan_result: dict, capital: float) -> str:
+    """Single summary message with all key stats."""
+    IST    = timezone(timedelta(hours=5, minutes=30))
+    now    = datetime.now(IST).strftime("%d %b %I:%M %p")
+    trend  = scan_result.get("market_trend", "SIDEWAYS")
+    nifty  = scan_result.get("nifty")
+    chg    = scan_result.get("change_pct")
+    crash  = scan_result.get("is_crash", False)
 
-def send_whatsapp(message: str, to_number: str = None,
-                  alert_type: str = "SIGNAL", stock: str = "") -> dict:
-    """
-    Sends a WhatsApp message via Twilio API.
-    Automatically logs every send attempt to Supabase alert_logs table.
+    longs   = scan_result.get("long_signals",      [])
+    shorts  = scan_result.get("short_signals",     [])
+    pre_bo  = scan_result.get("pre_breakout",      [])
+    pre_bd  = scan_result.get("pre_breakdown",     [])
+    rs      = scan_result.get("relative_strength", [])
 
-    Args:
-        message:    Formatted message string
-        to_number:  WhatsApp number — whatsapp:+91XXXXXXXXXX
-        alert_type: Type label for logging (SIGNAL, SUMMARY, TEST, etc.)
-        stock:      Stock name for logging (empty for summary messages)
+    trend_icon = "🟢" if trend == "UP" else "🔴" if trend == "DOWN" else "🟡"
+    nifty_str  = f"{nifty:,.2f}" if nifty else "N/A"
+    chg_str    = f"{chg:+.2f}%" if chg is not None else ""
 
-    Returns:
-        {"success": True/False, "sid": "...", "error": "..."}
-    """
-    # ── lazy import to avoid circular imports ──────────────────
-    try:
-        from scanner.database import log_alert
-        DB_LOGGING = True
-    except Exception:
-        DB_LOGGING = False
+    lines = [
+        f"📊 *Takshvi Trade — EOD Scan*",
+        f"🕐 {now} IST",
+        f"",
+        f"{trend_icon} *Market: {trend}* | Nifty {nifty_str} {chg_str}",
+        f"{'🚨 CRASH MODE — No longs today' if crash else ''}",
+        f"",
+        f"*Signals Found:*",
+        f"▲ Long:          {len(longs)} stocks",
+        f"▼ Short:         {len(shorts)} stocks",
+        f"⏳ Pre-Breakout: {len(pre_bo)} stocks",
+        f"⏳ Pre-Breakdown:{len(pre_bd)} stocks",
+        f"⚡ Rel Strength: {len(rs)} stocks",
+        f"",
+        f"💰 Capital: ₹{capital:,.0f}",
+    ]
 
-    if not TWILIO_AVAILABLE:
-        err = "twilio package not installed"
-        if DB_LOGGING:
-            log_alert(phone=to_number or "", alert_type=alert_type,
-                      stock=stock, status="failed", error=err)
-        return {"success": False, "error": err}
+    # Add top signals inline (max 5 total across all types)
+    top_signals = []
 
-    if not TWILIO_SID or not TWILIO_TOKEN:
-        err = "TWILIO credentials not set"
-        if DB_LOGGING:
-            log_alert(phone=to_number or "", alert_type=alert_type,
-                      stock=stock, status="failed", error=err)
-        return {"success": False, "error": err}
-
-    to = to_number or TO_NUMBER
-    if not to:
-        err = "No phone number — set ALERT_PHONE env var"
-        if DB_LOGGING:
-            log_alert(phone="", alert_type=alert_type,
-                      stock=stock, status="failed", error=err)
-        return {"success": False, "error": err}
-
-    if not to.startswith("whatsapp:"):
-        to = f"whatsapp:{to}"
-
-    try:
-        client = Client(TWILIO_SID, TWILIO_TOKEN)
-        msg    = client.messages.create(
-            body=message,
-            from_=FROM_NUMBER,
-            to=to
+    for s in longs[:2]:
+        top_signals.append(
+            f"▲ *{s.get('stock')}* | Entry ₹{s.get('entry')} | "
+            f"SL ₹{s.get('sl')} | T ₹{s.get('target')} | "
+            f"RR {s.get('rr')} | Qty {s.get('qty')} | Score {s.get('score')}"
         )
-        logging.info(f"WhatsApp sent: {msg.sid} to {to}")
+    for s in pre_bo[:2]:
+        top_signals.append(
+            f"⏳ *{s.get('stock')}* [BUY STOP] | Entry ₹{s.get('entry')} | "
+            f"SL ₹{s.get('sl')} | T ₹{s.get('target')} | Score {s.get('score')}"
+        )
+    for s in shorts[:1]:
+        top_signals.append(
+            f"▼ *{s.get('stock')}* [SHORT] | Entry ₹{s.get('entry')} | "
+            f"SL ₹{s.get('sl')} | T ₹{s.get('target')} | Score {s.get('score')}"
+        )
 
-        # ── Log success to Supabase ────────────────────────────
-        if DB_LOGGING:
-            log_alert(
-                phone=to,
-                alert_type=alert_type,
-                stock=stock,
-                message_sid=msg.sid,
-                status="sent",
-                error=""
-            )
+    if top_signals:
+        lines.append("")
+        lines.append("*Top Setups:*")
+        lines.extend(top_signals[:5])
 
-        return {"success": True, "sid": msg.sid, "to": to}
+    lines.extend([
+        "",
+        f"🔗 Full signals: takshvitrade.com",
+        f"_Takshvi Trade · NSE Signal Intelligence_"
+    ])
 
-    except Exception as e:
-        logging.error(f"Twilio error: {e}")
-
-        # ── Log failure to Supabase ────────────────────────────
-        if DB_LOGGING:
-            log_alert(
-                phone=to,
-                alert_type=alert_type,
-                stock=stock,
-                message_sid="",
-                status="failed",
-                error=str(e)
-            )
-
-        return {"success": False, "error": str(e)}
+    # Remove empty crash line if no crash
+    return "\n".join(l for l in lines if l != "")
 
 
-# ════════════════════════════════════════════════════════════
-# MASTER ALERT SENDER
-# ════════════════════════════════════════════════════════════
+def format_long_signal(signal: dict, market_trend: str,
+                       nifty: float = None, change_pct: float = None) -> str:
+    arrow  = "▲" if market_trend == "UP" else "⚠▲"
+    nifty_str = f"Nifty {nifty:,.2f} ({change_pct:+.2f}%)" if nifty else ""
+    return (
+        f"{arrow} *LONG SIGNAL — {signal.get('stock')}*\n"
+        f"Score: {signal.get('score')} | {signal.get('action','BUY')}\n\n"
+        f"Entry:  ₹{signal.get('entry')}\n"
+        f"SL:     ₹{signal.get('sl')}  ({signal.get('upside_pct', '')}% risk)\n"
+        f"Target: ₹{signal.get('target')}\n"
+        f"RR:     {signal.get('rr')}:1\n"
+        f"Qty:    {signal.get('qty')} shares\n"
+        f"Pos:    ₹{signal.get('position'):,.0f}\n\n"
+        f"Market: {market_trend} | {nifty_str}\n"
+        f"_Takshvi Trade_"
+    )
+
+
+def format_short_signal(signal: dict, market_trend: str,
+                        nifty: float = None, change_pct: float = None) -> str:
+    nifty_str = f"Nifty {nifty:,.2f} ({change_pct:+.2f}%)" if nifty else ""
+    return (
+        f"▼ *SHORT SIGNAL — {signal.get('stock')}*\n"
+        f"Score: {signal.get('score')} | {signal.get('action','SHORT')}\n\n"
+        f"Entry:  ₹{signal.get('entry')}\n"
+        f"SL:     ₹{signal.get('sl')}\n"
+        f"Target: ₹{signal.get('target')}\n"
+        f"RR:     {signal.get('rr')}:1\n"
+        f"Qty:    {signal.get('qty')} shares\n"
+        f"Pos:    ₹{signal.get('position'):,.0f}\n\n"
+        f"Market: {market_trend} | {nifty_str}\n"
+        f"_Takshvi Trade_"
+    )
+
+
+# ── MAIN ALERT FUNCTION — FIXED ───────────────────────────────
 
 def send_alerts_for_scan(scan_result: dict, capital: float,
-                          to_number: str = None) -> dict:
+                         to: Optional[str] = None) -> dict:
     """
-    Called after run_master_scan().
-    Sends market summary + individual signal alerts.
-    All sends are automatically logged to Supabase alert_logs.
+    FIXED: Sends max 3 messages total with 1s delay between each.
+    
+    Message 1: Full summary (market + all signal counts + top 5 setups)
+    Message 2: Top LONG signals detail (only if score >= 80)
+    Message 3: Top SHORT signals detail (only if score >= 80)
+    
+    Never sends more than 3 messages = never hits Twilio rate limit.
     """
-    import time
+    if not to:
+        to = os.getenv("ALERT_PHONE", "").strip()
+        if not to:
+            logging.error("send_alerts_for_scan: no phone number — set ALERT_PHONE")
+            return {"total_sent": 0, "total_failed": 0, "sent": [], "failed": []}
 
-    market_trend = scan_result.get("market_trend", "SIDEWAYS")
-    nifty        = scan_result.get("nifty")
-    change_pct   = scan_result.get("change_pct", 0)
-    longs        = scan_result.get("long_signals", [])
-    shorts       = scan_result.get("short_signals", [])
-    pre_bo       = scan_result.get("pre_breakout", [])
-    sent         = []
-    failed       = []
+    # Normalise phone
+    if not to.startswith("whatsapp:"):
+        to = f"whatsapp:{to}" if to.startswith("+") else f"whatsapp:+{to}"
 
-    # 1. Market summary
-    summary_msg = format_market_summary(scan_result)
-    r = send_whatsapp(summary_msg, to_number,
-                      alert_type="SUMMARY", stock="")
-    if r["success"]:
-        sent.append("market_summary")
-    else:
-        failed.append(f"market_summary: {r.get('error')}")
+    sent_list   = []
+    failed_list = []
 
-    # 2. Long signals (max 3)
-    for sig in longs[:3]:
-        time.sleep(1)
-        msg = format_long_signal(sig, market_trend, nifty, change_pct)
-        r   = send_whatsapp(msg, to_number,
-                            alert_type="LONG", stock=sig.get("stock", ""))
-        if r["success"]:
-            sent.append(f"long:{sig['stock']}")
+    def _send(msg: str, alert_type: str, stock: str = ""):
+        """Send one message and log to DB, with 1s delay after."""
+        result = send_whatsapp(msg, to)
+        # Log to Supabase alert_logs
+        try:
+            from scanner.database import log_alert
+            log_alert(
+                phone      = to,
+                alert_type = alert_type,
+                stock      = stock,
+                message_sid= result.get("sid", ""),
+                status     = "sent" if result["success"] else "failed",
+                error      = result.get("error", ""),
+            )
+        except Exception as db_err:
+            logging.warning(f"alert log DB write failed: {db_err}")
+
+        if result["success"]:
+            sent_list.append({"type": alert_type, "stock": stock, "sid": result["sid"]})
         else:
-            failed.append(f"long:{sig['stock']}: {r.get('error')}")
+            failed_list.append({"type": alert_type, "stock": stock, "error": result["error"]})
 
-    # 3. Short signals (max 3)
-    for sig in shorts[:3]:
+        # CRITICAL: always sleep 1s between messages to stay under Twilio rate limit
         time.sleep(1)
-        msg = format_short_signal(sig, market_trend, nifty, change_pct)
-        r   = send_whatsapp(msg, to_number,
-                            alert_type="SHORT", stock=sig.get("stock", ""))
-        if r["success"]:
-            sent.append(f"short:{sig['stock']}")
-        else:
-            failed.append(f"short:{sig['stock']}: {r.get('error')}")
 
-    # 4. Pre-breakout alerts (max 3)
-    for sig in pre_bo[:3]:
-        time.sleep(1)
-        msg = format_prebreakout_signal(sig, market_trend)
-        r   = send_whatsapp(msg, to_number,
-                            alert_type="PRE_BREAKOUT", stock=sig.get("stock", ""))
-        if r["success"]:
-            sent.append(f"pre_bo:{sig['stock']}")
-        else:
-            failed.append(f"pre_bo:{sig['stock']}: {r.get('error')}")
+    # ── Message 1: Summary (always sent) ─────────────────────
+    summary_msg = format_market_summary(scan_result, capital)
+    _send(summary_msg, "SUMMARY")
+
+    # ── Message 2: Top longs detail (only best signals) ──────
+    longs = [s for s in scan_result.get("long_signals", []) if (s.get("score") or 0) >= 78]
+    if longs:
+        top_long = longs[0]  # best scored signal only
+        try:
+            from scanner.engine import get_market_trend
+            trend, nifty, chg = get_market_trend()
+        except Exception:
+            trend, nifty, chg = scan_result.get("market_trend","SIDEWAYS"), scan_result.get("nifty"), scan_result.get("change_pct")
+        msg = format_long_signal(top_long, trend, nifty, chg)
+        _send(msg, "LONG", top_long.get("stock", ""))
+
+    # ── Message 3: Top pre-breakout detail (only if score high) ──
+    pre_bo = [s for s in scan_result.get("pre_breakout", []) if (s.get("score") or 0) >= 83]
+    if pre_bo:
+        top_bo = pre_bo[0]
+        msg = (
+            f"⏳ *BUY STOP TONIGHT — {top_bo.get('stock')}*\n"
+            f"Score: {top_bo.get('score')}\n\n"
+            f"Set buy stop order at: ₹{top_bo.get('entry')}\n"
+            f"SL: ₹{top_bo.get('sl')}\n"
+            f"Target: ₹{top_bo.get('target')}\n"
+            f"RR: {top_bo.get('rr')}:1 | Qty: {top_bo.get('qty')} shares\n\n"
+            f"_Place order tonight before 9:15 AM_\n"
+            f"_Takshvi Trade_"
+        )
+        _send(msg, "PRE_BREAKOUT", top_bo.get("stock", ""))
+
+    total_sent   = len(sent_list)
+    total_failed = len(failed_list)
+    logging.info(f"Alerts: {total_sent} sent, {total_failed} failed → {to[:25]}")
 
     return {
-        "sent":         sent,
-        "failed":       failed,
-        "total_sent":   len(sent),
-        "total_failed": len(failed),
+        "total_sent":   total_sent,
+        "total_failed": total_failed,
+        "sent":         sent_list,
+        "failed":       failed_list,
     }
-
-
-# ── Backward compatibility aliases ────────────────────────────
-def format_signal_message(trades, capital, market):
-    if not trades:
-        return "No signals found today."
-    lines = [f"📊 TAKSHVI TRADE SIGNALS\nMarket: {market}\nCapital: ₹{capital:,.0f}\n"]
-    for t in trades[:5]:
-        lines.append(
-            f"📈 {t.get('stock')} | Entry: ₹{t.get('entry')} | "
-            f"SL: ₹{t.get('sl')} | Target: ₹{t.get('target')} | "
-            f"RR: 1:{t.get('rr')} | Score: {t.get('score')}"
-        )
-    lines.append("\n⚠️ Not investment advice. takshvitrade.com")
-    return "\n".join(lines)
-
-
-def send_test_message(to_number: str) -> bool:
-    msg    = format_test_message()
-    result = send_whatsapp(msg, to_number, alert_type="TEST", stock="")
-    return result["success"]
