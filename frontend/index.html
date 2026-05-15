@@ -849,11 +849,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   <!-- 🔥 THEN TOP STORIES -->
   <h2 style="margin:30px 0 10px 0;">Top stories</h2>
 
-  <div id="news-container" style="
-    display:grid;
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-    gap:20px;
-  "></div>
+  <div id="news-container" style="display:flex;flex-direction:column;gap:0;"></div>
 </div>
 
 <script>
@@ -928,7 +924,7 @@ function showTab(name){
 
   // 🔥 THIS IS MISSING — ADD IT
   if(name === "news"){
-    console.log("NEWS FUNCTION TRIGGERED");
+    newsLoaded = false;   // always refresh when switching to news tab
     loadNews();
   }
 }
@@ -951,131 +947,107 @@ function formatTime(raw){
 async function loadNews(){
   if(newsLoaded) return;
 
-  console.log("NEWS LOADING...");
-
   const container = document.getElementById("news-container");
   if(!container) return;
 
-  container.innerHTML = `<div style="color:#888">Loading news...</div>`;
+  container.innerHTML = `<div style="color:#888;padding:1rem">Loading news...</div>`;
 
   try{
     const res = await fetch(`${API}/api/news`);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const sentiment = data.sentiment || 0;
 
-    document.getElementById("positive-news").textContent =
-    sentiment > 0 ? sentiment : 0;
+    // ── Sentiment — backend now returns a dict, not a plain number ──
+    const sent = data.sentiment || {};
+    const posCount    = typeof sent === 'object' ? (sent.positive || 0) : (sent > 0 ? sent : 0);
+    const negCount    = typeof sent === 'object' ? (sent.negative || 0) : (sent < 0 ? Math.abs(sent) : 0);
+    const apiVerdict  = typeof sent === 'object' ? (sent.verdict || 'MIXED') : (sent > 2 ? 'POSITIVE' : sent < -2 ? 'NEGATIVE' : 'MIXED');
+    const verdictText = typeof sent === 'object' ? (sent.verdict_text || '') : '';
 
-    document.getElementById("negative-news").textContent =
-    sentiment < 0 ? Math.abs(sentiment) : 0;
+    document.getElementById("positive-news").textContent = posCount;
+    document.getElementById("negative-news").textContent = negCount;
 
     const verdictEl = document.getElementById("news-verdict");
-
-    // FIX 4: Market-aware verdict — news sentiment alone is not enough
-    // News keywords can be BULLISH while Nifty is DOWN — these are independent signals
-    // We now show BOTH and give a combined recommendation
-    const marketTrend = window._marketTrend || 'SIDEWAYS'; // set by loadMarket()
-
-    let newsVerdict, newsColor;
-    if(sentiment > 2){
-      newsVerdict = "BULLISH";
-      newsColor   = "#1ddd8a";
-    } else if(sentiment < -2){
-      newsVerdict = "BEARISH";
-      newsColor   = "#ff4560";
-    } else {
-      newsVerdict = "MIXED";
-      newsColor   = "#f5c018";
+    if(verdictEl){
+      // Map API verdict to display label
+      const labelMap  = { POSITIVE:"BULLISH", NEGATIVE:"BEARISH", MIXED:"MIXED", BULLISH:"BULLISH", BEARISH:"BEARISH" };
+      const colorMap  = { POSITIVE:"#1ddd8a", NEGATIVE:"#ff4560", MIXED:"#f5c018", BULLISH:"#1ddd8a", BEARISH:"#ff4560" };
+      const label = labelMap[apiVerdict] || "MIXED";
+      const color = colorMap[apiVerdict] || "#f5c018";
+      verdictEl.textContent        = label;
+      verdictEl.style.color        = color;
+      verdictEl.style.background   = "transparent";
+      verdictEl.style.border       = "none";
+      verdictEl.style.padding      = "0";
+      verdictEl.style.display      = "block";
+      verdictEl.style.fontFamily   = "var(--font-display)";
+      verdictEl.style.fontWeight   = "700";
+      verdictEl.style.fontSize     = "1.8rem";
     }
 
-    verdictEl.textContent = newsVerdict;
-    verdictEl.style.color = newsColor;
-    verdictEl.style.background = "transparent";
-    verdictEl.style.border = "none";
-    verdictEl.style.padding = "0";
-    verdictEl.style.display = "block";
-    verdictEl.style.fontFamily = "var(--font-display)";
-    verdictEl.style.fontWeight = "700";
-    verdictEl.style.fontSize   = "1.8rem";
-
-    // Dynamic recommendation based on BOTH market + news
+    // ── Recommendation — combine market trend + news verdict ──
+    const marketTrend = window._marketTrend || 'SIDEWAYS';
+    const newsLabel   = (apiVerdict === 'POSITIVE' || apiVerdict === 'BULLISH') ? 'BULLISH'
+                      : (apiVerdict === 'NEGATIVE' || apiVerdict === 'BEARISH') ? 'BEARISH' : 'MIXED';
     const recEl = document.getElementById('news-recommendation');
     if(recEl){
       if(marketTrend === "DOWN"){
         recEl.textContent = "⚠️ Market is BEARISH — no new trades. Scanner is blocked.";
         recEl.style.color = "#ff4560";
-      } else if(newsVerdict === "BULLISH" && marketTrend === "UP"){
+      } else if(newsLabel === "BULLISH" && marketTrend === "UP"){
         recEl.textContent = "✅ News + Market both BULLISH — good trading environment today.";
         recEl.style.color = "#1ddd8a";
-      } else if(newsVerdict === "BEARISH" && marketTrend === "UP"){
+      } else if(newsLabel === "BEARISH" && marketTrend === "UP"){
         recEl.textContent = "⚠️ Market UP but news BEARISH — trade smallest size, tighten stops.";
         recEl.style.color = "#f5c018";
       } else {
-        recEl.textContent = "📊 Mixed signals — trade only highest-score setups (80+).";
+        recEl.textContent = verdictText || "📊 Mixed signals — trade only highest-score setups (80+).";
         recEl.style.color = "#f5c018";
       }
     }
 
-    newsLoaded = true;
-
-    console.log("NEWS DATA:", data);
-
+    // ── Render news cards ──
     container.innerHTML = "";
 
-    if(!data || !data.news || data.news.length === 0){
-      container.innerHTML = `<div style="color:gold">No news available</div>`;
+    if(!data.news || data.news.length === 0){
+      container.innerHTML = `<div style="color:gold;padding:1rem">No news available right now. Try again in a few minutes.</div>`;
+      newsLoaded = true;
       return;
     }
 
+    // Switch container to list layout (cards were too wide/broken on grid)
+    container.style.display      = "flex";
+    container.style.flexDirection= "column";
+    container.style.gap          = "0";
+
     data.news.forEach(n => {
       const div = document.createElement("div");
-
-      div.style = `
-  padding:14px 10px;
-  border-bottom:1px solid #1e2836;
-  cursor:pointer;
-  transition:all 0.2s ease;
-`;
-
-div.onmouseover = () => {
-  div.style.background = "rgba(255,255,255,0.03)";
-};
-
-div.onmouseout = () => {
-  div.style.background = "transparent";
-};
-
-div.innerHTML = `
-  <div style="
-    font-size:12px;
-    color:#888;
-    margin-bottom:6px;
-  ">
-    ${formatTime(n.time)} • ${n.source}
-  </div>
-
-  <div style="
-    font-size:15px;
-    color:#e8f0f8;
-    line-height:1.5;
-    font-weight:500;
-  ">
-    ${n.title}
-  </div>
-`;
+      div.style.cssText = `
+        padding:14px 16px;
+        border-bottom:1px solid #1e2836;
+        cursor:pointer;
+        transition:background 0.15s ease;
+      `;
+      div.onmouseover = () => { div.style.background = "rgba(0,229,200,0.04)"; };
+      div.onmouseout  = () => { div.style.background = "transparent"; };
+      div.innerHTML = `
+        <div style="font-size:11px;color:#5a7a96;margin-bottom:5px;font-family:var(--font-mono);letter-spacing:0.05em">
+          ${formatTime(n.time)} &nbsp;·&nbsp; ${n.source || ''}
+        </div>
+        <div style="font-size:14px;color:#e8f0f8;line-height:1.55;font-weight:500">
+          ${n.title || ''}
+        </div>
+      `;
       div.onclick = () => window.open(n.link, "_blank");
-
       container.appendChild(div);
     });
 
+    newsLoaded = true;
+
   }catch(err){
     newsLoaded = false;
-
     console.error("❌ News load failed:", err);
-
-    container.innerHTML = `
-      <div style="color:red">Failed to load news</div>
-    `;
+    container.innerHTML = `<div style="color:#ff4560;padding:1rem">⚠️ Failed to load news. Check your connection.</div>`;
   }
 }
 /* ─── RUN SCANNER (FINAL CLEAN VERSION) ─── */

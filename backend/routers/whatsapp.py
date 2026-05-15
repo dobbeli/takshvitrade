@@ -20,12 +20,26 @@ IST = timezone(timedelta(hours=5, minutes=30))
 # ── Helpers ───────────────────────────────────────────────────
 
 def normalize_phone(phone: str) -> str:
+    """
+    Normalise any phone format to whatsapp:+91XXXXXXXXXX
+    Handles:
+      - whatsapp:918XXXXXXXXX   (Railway env var format — already has whatsapp: prefix)
+      - +918XXXXXXXXX
+      - 918XXXXXXXXX
+      - 8XXXXXXXXX  (10 digit)
+    """
     phone = phone.strip().replace(" ", "").replace("-", "")
-    if not phone.startswith("+"):
-        phone = "+91" + phone.lstrip("0")
-    if not phone.startswith("whatsapp:"):
-        phone = f"whatsapp:{phone}"
-    return phone
+    # Strip whatsapp: prefix first — we'll re-add it cleanly at the end
+    if phone.startswith("whatsapp:"):
+        phone = phone[len("whatsapp:"):]
+    # Now phone is a raw number like 918433887169 or +918433887169 or 8433887169
+    if phone.startswith("+"):
+        phone = phone[1:]   # strip leading +
+    # If 10 digits (no country code), add 91
+    if len(phone) == 10:
+        phone = "91" + phone
+    # Now always prefix with whatsapp:+
+    return f"whatsapp:+{phone}"
 
 
 def get_default_phone() -> Optional[str]:
