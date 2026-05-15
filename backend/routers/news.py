@@ -1,147 +1,108 @@
-# """News Router — /api/news (user's get_eod_news integrated)"""
-# from fastapi import APIRouter
-# import feedparser
-# from datetime import datetime
-
-# router = APIRouter()
-
-# FEEDS = {
-#     "Economic Times Markets": "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
-#     "Moneycontrol":           "https://www.moneycontrol.com/rss/marketreports.xml",
-#     "Reuters Business":       "https://feeds.reuters.com/reuters/businessNews",
-#     "Mint Markets":           "https://www.livemint.com/rss/markets",
-# }
-
-# POSITIVE = ["rally","gain","rise","surge","bull","up","high","record","growth","positive"]
-# NEGATIVE = ["fall","drop","decline","crash","bear","down","low","loss","recession","negative"]
-
-# @router.get("/eod")
-# def get_eod_news():
-#     all_headlines = []
-#     sources       = []
-
-#     for source, url in FEEDS.items():
-#         try:
-#             feed    = feedparser.parse(url)
-#             entries = feed.entries[:3]
-#             if not entries: continue
-#             items = []
-#             for entry in entries:
-#                 title = entry.get("title", "")[:120]
-#                 pub   = entry.get("published", "")[:16]
-#                 link  = entry.get("link", "")
-#                 items.append({"title": title, "published": pub, "link": link})
-#                 all_headlines.append(title)
-#             sources.append({"source": source, "articles": items})
-#         except Exception:
-#             pass
-
-#     text      = " ".join(all_headlines).lower()
-#     pos_count = sum(1 for w in POSITIVE if w in text)
-#     neg_count = sum(1 for w in NEGATIVE if w in text)
-
-#     if pos_count > neg_count + 2:
-#         verdict = "POSITIVE"
-#         verdict_text = "Good environment for longs"
-#     elif neg_count > pos_count + 2:
-#         verdict = "NEGATIVE"
-#         verdict_text = "Trade smaller size tomorrow"
-#     else:
-#         verdict = "MIXED"
-#         verdict_text = "Stick to highest-score trades only"
-
-#     return {
-#         "sources":      sources,
-#         "sentiment": {
-#             "positive":     pos_count,
-#             "negative":     neg_count,
-#             "verdict":      verdict,
-#             "verdict_text": verdict_text,
-#         },
-#         "fetched_at": datetime.now().isoformat(),
-#     }
-
+"""News Router — /api/news
+FIXES:
+- Added socket timeout so slow RSS feeds don't hang the server
+- Endpoint registered as both "" and "/" so /api/news works without trailing slash
+- Graceful fallback if all feeds fail (returns empty list, not 500)
+- Sentiment now returns a dict (positive/negative/verdict) for easier frontend use
+"""
 from fastapi import APIRouter
 import feedparser
+import socket
 from datetime import datetime
 
 router = APIRouter()
 
-# 🔹 RSS Sources
 RSS_FEEDS = [
-    "https://www.moneycontrol.com/rss/business.xml",
-    "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
-    "https://feeds.reuters.com/reuters/businessNews",
-    "https://www.livemint.com/rss/markets",
+    ("Economic Times Markets", "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"),
+    ("Moneycontrol",           "https://www.moneycontrol.com/rss/business.xml"),
+    ("Reuters Business",       "https://feeds.reuters.com/reuters/businessNews"),
+    ("Mint Markets",           "https://www.livemint.com/rss/markets"),
 ]
 
-# 🔥 Safe Time Parser (IMPORTANT for sorting)
-def parse_time(time_str):
+POSITIVE_KW = ["growth","profit","bullish","strong","upgrade","record","expansion","beat","surge","positive","rise","rally","gain"]
+NEGATIVE_KW = ["loss","decline","bearish","weak","downgrade","fall","drop","miss","crash","negative","slump","sell-off"]
+
+
+def parse_time(time_str: str) -> datetime:
+    for fmt in ("%a, %d %b %Y %H:%M:%S %z", "%a, %d %b %Y %H:%M:%S GMT"):
+        try:
+            return datetime.strptime(time_str, fmt)
+        except Exception:
+            pass
+    return datetime.min
+
+
+def fetch_feed_with_timeout(url: str, timeout: int = 8):
+    """feedparser has no built-in timeout — use socket default timeout as workaround."""
+    old = socket.getdefaulttimeout()
     try:
-        return datetime.strptime(time_str, "%a, %d %b %Y %H:%M:%S %z")
-    except:
-        return datetime.min  # fallback if parsing fails
+        socket.setdefaulttimeout(timeout)
+        return feedparser.parse(url)
+    except Exception:
+        return None
+    finally:
+        socket.setdefaulttimeout(old)
 
 
-# 🔥 Sentiment Function
-def get_news_sentiment(news_list):
-    positive_keywords = [
-        "growth", "profit", "bullish", "strong", "upgrade",
-        "record", "expansion", "beat", "surge", "positive"
-    ]
+def compute_sentiment(news_list: list) -> dict:
+    pos = neg = 0
+    for item in news_list:
+        text = item.get("title", "").lower()
+        for w in POSITIVE_KW:
+            if w in text:
+                pos += 1
+        for w in NEGATIVE_KW:
+            if w in text:
+                neg += 1
 
-    negative_keywords = [
-        "loss", "decline", "bearish", "weak", "downgrade",
-        "fall", "drop", "miss", "crash", "negative"
-    ]
+    if pos > neg + 2:
+        verdict = "POSITIVE"
+        verdict_text = "Good environment for longs"
+    elif neg > pos + 2:
+        verdict = "NEGATIVE"
+        verdict_text = "Trade smaller size — caution"
+    else:
+        verdict = "MIXED"
+        verdict_text = "Stick to highest-score setups only"
 
-    score = 0
-
-    for news in news_list:
-        text = news.get("title", "").lower()
-
-        for word in positive_keywords:
-            if word in text:
-                score += 1
-
-        for word in negative_keywords:
-            if word in text:
-                score -= 1
-
-    return score
+    return {"positive": pos, "negative": neg, "verdict": verdict, "verdict_text": verdict_text}
 
 
-# 🔥 NEWS API
+# Register both "" and "/" so /api/news and /api/news/ both work
+@router.get("")
 @router.get("/")
 def get_news():
     news_items = []
 
-    for feed_url in RSS_FEEDS:
-        feed = feedparser.parse(feed_url)
+    for source_name, feed_url in RSS_FEEDS:
+        try:
+            feed = fetch_feed_with_timeout(feed_url, timeout=8)
+            if not feed or not feed.entries:
+                continue
+            for entry in feed.entries[:5]:
+                time_str = entry.get("published", "")
+                news_items.append({
+                    "title":       entry.get("title", "No title")[:150],
+                    "link":        entry.get("link", ""),
+                    "source":      source_name,
+                    "time":        time_str,
+                    "_sort_time":  parse_time(time_str),
+                })
+        except Exception:
+            continue  # never let one broken feed crash the whole endpoint
 
-        for entry in feed.entries[:5]:
-            time_str = entry.get("published", "")
-
-            news_items.append({
-                "title": entry.title,
-                "link": entry.link,
-                "source": feed.feed.get("title", "Market"),
-                "time": time_str,
-                "parsed_time": parse_time(time_str)  # for sorting
-            })
-
-    # 🔥 SORT → Latest first
-    news_items = sorted(news_items, key=lambda x: x["parsed_time"], reverse=True)
-
-    # 🔥 Remove parsed_time before sending
+    # Sort latest first, remove internal sort key
+    news_items.sort(key=lambda x: x["_sort_time"], reverse=True)
     for n in news_items:
-        n.pop("parsed_time", None)
+        n.pop("_sort_time", None)
 
-    # 🔥 Calculate sentiment AFTER sorting
-    sentiment_score = get_news_sentiment(news_items)
+    news_items = news_items[:20]
+    sentiment  = compute_sentiment(news_items)
 
-    # 🔥 Final response (UI compatible)
     return {
-        "news": news_items[:15],
-        "sentiment": sentiment_score
+        "news":      news_items,
+        "count":     len(news_items),
+        "sentiment": sentiment,
+        "fetched_at": datetime.now().isoformat(),
+        "status":    "ok" if news_items else "no_data",
     }
