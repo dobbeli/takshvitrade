@@ -1042,6 +1042,14 @@ function switchAuthTab(tab){
   document.getElementById('tab-reg-btn').classList.toggle('active',   tab==='register');
 }
 
+function openRegisterModal(prefillEmail = ''){
+  openAuthModal('register');
+  const regEmail = document.getElementById('reg-email');
+  if(regEmail && prefillEmail && !regEmail.value.trim()){
+    regEmail.value = prefillEmail;
+  }
+}
+
 function initAuthBindings(){
   const overlay = document.getElementById('auth-overlay');
   if(overlay){
@@ -1113,6 +1121,14 @@ async function authLogin(){
     const data = await res.json();
 
     if(!res.ok){
+      if(res.status === 401 && (data.detail || '').includes('No account found')){
+        openRegisterModal(email);
+        const regErr = document.getElementById('reg-error');
+        if(regErr){
+          regErr.textContent = 'No account found with this email. Create your free account below.';
+        }
+        return;
+      }
       errEl.textContent = data.detail || 'Login failed. Check your email and password.';
       return;
     }
