@@ -1010,7 +1010,9 @@ function updateAuthUI(){
 // ── Modal open/close ──────────────────────────────────────────
 function openAuthModal(tab = 'login'){
   switchAuthTab(tab);
-  document.getElementById('auth-overlay').classList.add('open');
+  const overlay = document.getElementById('auth-overlay');
+  if(!overlay) return;
+  overlay.classList.add('open');
   document.body.style.overflow = 'hidden';
   // Focus first input
   setTimeout(() => {
@@ -1022,7 +1024,9 @@ function openAuthModal(tab = 'login'){
 }
 
 function closeAuthModal(){
-  document.getElementById('auth-overlay').classList.remove('open');
+  const overlay = document.getElementById('auth-overlay');
+  if(!overlay) return;
+  overlay.classList.remove('open');
   document.body.style.overflow = '';
   // Clear errors
   ['login-error','reg-error'].forEach(id => {
@@ -1038,10 +1042,28 @@ function switchAuthTab(tab){
   document.getElementById('tab-reg-btn').classList.toggle('active',   tab==='register');
 }
 
-// Close modal on overlay click
-document.getElementById('auth-overlay').addEventListener('click', e => {
-  if(e.target === document.getElementById('auth-overlay')) closeAuthModal();
-});
+function initAuthBindings(){
+  const overlay = document.getElementById('auth-overlay');
+  if(overlay){
+    overlay.addEventListener('click', e => {
+      if(e.target === overlay) closeAuthModal();
+    });
+  }
+
+  const loginPassword = document.getElementById('login-password');
+  if(loginPassword){
+    loginPassword.addEventListener('keydown', e => {
+      if(e.key === 'Enter') authLogin();
+    });
+  }
+
+  const regPhone = document.getElementById('reg-phone');
+  if(regPhone){
+    regPhone.addEventListener('keydown', e => {
+      if(e.key === 'Enter') authRegister();
+    });
+  }
+}
 
 // ── openApp — now checks auth first ──────────────────────────
 function openApp(){
@@ -1158,19 +1180,14 @@ async function authRegister(){
   }
 }
 
-// Enter key support on auth forms
-document.getElementById('login-password').addEventListener('keydown', e => {
-  if(e.key === 'Enter') authLogin();
-});
-document.getElementById('reg-phone').addEventListener('keydown', e => {
-  if(e.key === 'Enter') authRegister();
-});
-
 /* ─── App open/close ─── */
 // openApp and closeApp now defined in auth system above
 
 // Restore session on page load
-authRestoreSession();
+document.addEventListener('DOMContentLoaded', () => {
+  initAuthBindings();
+  authRestoreSession();
+});
 /* ─── Tabs ─── */
 function showTab(name){
   console.log("TAB CLICKED:", name);
