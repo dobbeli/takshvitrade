@@ -53,7 +53,7 @@ nav.scrolled{border-bottom-color:rgba(0,229,200,0.15)}
 .nav-links a{font-family:var(--font-mono);font-size:0.68rem;color:var(--muted);text-decoration:none;letter-spacing:0.12em;text-transform:uppercase;transition:color 0.2s}
 .nav-links a:hover{color:var(--cyan)}
 .nav-right{display:flex;gap:0.8rem;align-items:center}
-.btn-nav{font-family:var(--font-mono);font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.55rem 1.2rem;border:1px solid var(--border2);background:transparent;color:var(--text);cursor:pointer;text-decoration:none;transition:all 0.2s}
+.btn-nav{font-family:var(--font-mono);font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.55rem 1.2rem;border:1px solid var(--border2);background:transparent;color:var(--text);cursor:pointer;text-decoration:none;transition:all 0.2s;display:inline-flex;align-items:center;line-height:1}
 .btn-nav:hover{border-color:var(--cyan);color:var(--cyan)}
 .btn-nav-solid{background:var(--cyan);border-color:var(--cyan);color:var(--black);font-weight:500}
 .btn-nav-solid:hover{background:var(--green);border-color:var(--green);color:var(--black)}
@@ -465,7 +465,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
     <li><a href="#roadmap">Roadmap</a></li>
   </ul>
   <div class="nav-right">
-    <a href="#" class="btn-nav" onclick="openApp()">Log In</a>
+    <button class="btn-nav" onclick="openApp()" id="nav-login-btn">Log In</button>
     <a href="#pricing" class="btn-nav btn-nav-solid">Start Free</a>
   </div>
 </nav>
@@ -988,7 +988,7 @@ function updateAuthUI(){
   const strip    = document.getElementById('auth-user-strip');
   const emailEl  = document.getElementById('auth-user-email');
   const badgeEl  = document.getElementById('auth-plan-badge');
-  const loginBtn = document.querySelector('.btn-nav[onclick="openApp()"]');
+  const loginBtn = document.getElementById('nav-login-btn');
 
   if(authIsLoggedIn() && _authUser){
     // Show user strip in app header
