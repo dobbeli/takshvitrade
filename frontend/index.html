@@ -465,7 +465,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
     <li><a href="#roadmap">Roadmap</a></li>
   </ul>
   <div class="nav-right">
-    <button class="btn-nav" onclick="openApp()" id="nav-login-btn">Log In</button>
+    <button class="btn-nav" onclick="navLoginClick()" id="nav-login-btn">Log In</button>
     <a href="#pricing" class="btn-nav btn-nav-solid">Start Free</a>
   </div>
 </nav>
@@ -974,13 +974,30 @@ function authClearSession(){
   updateAuthUI();
 }
 
-// Restore session on page load
+// Restore session on page load — validates JWT expiry before trusting token
 function authRestoreSession(){
   try {
     const token = sessionStorage.getItem('tt_token');
     const user  = JSON.parse(sessionStorage.getItem('tt_user') || 'null');
-    if(token && user){ _authToken = token; _authUser = user; updateAuthUI(); }
-  } catch(_){}
+    if(!token || !user) return;
+    // Decode JWT payload (base64) and check expiry without a library
+    const parts = token.split('.');
+    if(parts.length !== 3) { sessionStorage.clear(); return; }
+    const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+    const nowSec  = Math.floor(Date.now() / 1000);
+    if(payload.exp && payload.exp < nowSec){
+      // Token expired — clear it so Log In button works correctly
+      sessionStorage.removeItem('tt_token');
+      sessionStorage.removeItem('tt_user');
+      return;
+    }
+    _authToken = token;
+    _authUser  = user;
+    updateAuthUI();
+  } catch(_){
+    // If anything goes wrong parsing, clear and start fresh
+    try { sessionStorage.removeItem('tt_token'); sessionStorage.removeItem('tt_user'); } catch(__) {}
+  }
 }
 
 // ── UI updates after login/logout ─────────────────────────────
@@ -1068,6 +1085,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Restore session from sessionStorage
   authRestoreSession();
 });
+
+// ── navLoginClick — called by the nav Log In / Dashboard button ──
+function navLoginClick(){
+  if(authIsLoggedIn()){
+    document.getElementById('app').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  } else {
+    openAuthModal('login');
+  }
+}
 
 // ── openApp — now checks auth first ──────────────────────────
 function openApp(){
