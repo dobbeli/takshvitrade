@@ -1,0 +1,2206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Takshvi Trade — NSE Signal Intelligence</title>
+<!-- TradingView charts open in new tab via links — no iframe needed -->
+<meta name="description" content="ATR-based swing signals, multi-factor scoring, and trade order sheets for Indian retail traders."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ─────────────────────────────────────────
+   DESIGN TOKENS
+───────────────────────────────────────── */
+:root {
+  --black:  #030405;
+  --dark:   #080b0e;
+  --card:   #0d1117;
+  --card2:  #111820;
+  --border: #181f28;
+  --border2:#1e2836;
+  --cyan:   #00e5c8;
+  --cyan2:  #00b8a0;
+  --green:  #1ddd8a;
+  --red:    #ff4560;
+  --gold:   #f5c018;
+  --blue:   #378add;
+  --muted:  #3d5068;
+  --text:   #8da4bc;
+  --white:  #e8f0f8;
+  --font-display: 'Syne', sans-serif;
+  --font-mono:    'DM Mono', monospace;
+  --font-body:    'DM Sans', sans-serif;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--black);color:var(--text);font-family:var(--font-body);font-weight:300;overflow-x:hidden;cursor:none}
+
+/* custom cursor */
+#cursor{position:fixed;width:8px;height:8px;background:var(--cyan);border-radius:50%;pointer-events:none;z-index:9999;transition:transform 0.1s;mix-blend-mode:difference}
+#cursor-ring{position:fixed;width:32px;height:32px;border:1px solid rgba(0,229,200,0.4);border-radius:50%;pointer-events:none;z-index:9998;transition:all 0.15s ease}
+
+/* noise */
+body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");pointer-events:none;z-index:1}
+
+/* ─── NAV ─── */
+nav{position:fixed;top:0;left:0;right:0;z-index:500;display:flex;align-items:center;justify-content:space-between;padding:1.1rem 4rem;background:rgba(3,4,5,0.8);backdrop-filter:blur(24px);border-bottom:1px solid var(--border);transition:border-color 0.3s}
+nav.scrolled{border-bottom-color:rgba(0,229,200,0.15)}
+.logo{font-family:var(--font-display);font-weight:800;font-size:1.25rem;letter-spacing:-0.03em;color:var(--white);text-decoration:none}
+.logo em{font-style:normal;color:var(--cyan)}
+.nav-links{display:flex;gap:2.5rem;list-style:none}
+.nav-links a{font-family:var(--font-mono);font-size:0.68rem;color:var(--muted);text-decoration:none;letter-spacing:0.12em;text-transform:uppercase;transition:color 0.2s}
+.nav-links a:hover{color:var(--cyan)}
+.nav-right{display:flex;gap:0.8rem;align-items:center}
+.btn-nav{font-family:var(--font-mono);font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.55rem 1.2rem;border:1px solid var(--border2);background:transparent;color:var(--text);cursor:pointer;text-decoration:none;transition:all 0.2s;display:inline-flex;align-items:center;line-height:1}
+.btn-nav:hover{border-color:var(--cyan);color:var(--cyan)}
+.btn-nav-solid{background:var(--cyan);border-color:var(--cyan);color:var(--black);font-weight:500}
+.btn-nav-solid:hover{background:var(--green);border-color:var(--green);color:var(--black)}
+
+/* ─── HERO ─── */
+#hero{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:9rem 4rem 5rem;position:relative;overflow:hidden}
+.hero-mesh{position:absolute;inset:0;background:
+  radial-gradient(ellipse 60% 50% at 20% 30%, rgba(0,229,200,0.07) 0%, transparent 60%),
+  radial-gradient(ellipse 40% 60% at 80% 70%, rgba(29,221,138,0.04) 0%, transparent 60%);
+  pointer-events:none}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,229,200,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,200,0.03) 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(ellipse 90% 70% at 50% 40%,black,transparent);pointer-events:none}
+.eyebrow{font-family:var(--font-mono);font-size:0.68rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--cyan);margin-bottom:1.8rem;display:flex;align-items:center;gap:0.8rem}
+.eyebrow::before{content:'';width:28px;height:1px;background:var(--cyan);flex-shrink:0}
+h1{font-family:var(--font-display);font-weight:800;font-size:clamp(3.2rem,8vw,7.5rem);line-height:0.92;letter-spacing:-0.05em;color:var(--white);margin-bottom:2.2rem;max-width:1000px}
+h1 .accent{color:var(--cyan);display:block}
+.hero-body{font-size:1.05rem;color:var(--muted);max-width:460px;line-height:1.8;margin-bottom:3.5rem}
+.hero-actions{display:flex;gap:1rem;flex-wrap:wrap;align-items:center}
+.btn-primary{background:var(--cyan);color:var(--black);font-family:var(--font-display);font-weight:700;font-size:0.9rem;padding:1.05rem 2.6rem;border:none;cursor:pointer;text-decoration:none;display:inline-block;letter-spacing:0.01em;transition:all 0.2s;position:relative;overflow:hidden}
+.btn-primary::after{content:'→';position:absolute;right:-20px;opacity:0;transition:all 0.2s}
+.btn-primary:hover{background:var(--green);padding-right:3.2rem}
+.btn-primary:hover::after{right:1rem;opacity:1}
+.btn-ghost{border:1px solid var(--border2);color:var(--text);font-family:var(--font-mono);font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;padding:1.05rem 2rem;background:transparent;cursor:pointer;text-decoration:none;display:inline-block;transition:all 0.2s}
+.btn-ghost:hover{border-color:var(--cyan);color:var(--cyan)}
+
+/* nifty badge */
+.nifty-badge{display:inline-flex;align-items:center;gap:0.8rem;border:1px solid var(--border2);padding:0.6rem 1rem;background:var(--card);margin-bottom:2rem}
+.nifty-dot{width:7px;height:7px;border-radius:50%;animation:pulse 1.8s ease infinite}
+.dot-green{background:var(--green)}
+.dot-red{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+.nifty-text{font-family:var(--font-mono);font-size:0.72rem;color:var(--text)}
+.nifty-text strong{color:var(--white)}
+
+/* ─── TICKER ─── */
+.ticker-wrap{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:0.85rem 0;overflow:hidden;background:rgba(8,11,14,0.7);position:relative;z-index:2}
+.ticker-track{display:flex;gap:0;animation:scroll 40s linear infinite;width:max-content}
+.ticker-item{display:inline-flex;align-items:center;gap:0.5rem;padding:0 2rem;border-right:1px solid var(--border);font-family:var(--font-mono);font-size:0.72rem;white-space:nowrap}
+.t-name{color:var(--white);font-weight:500;letter-spacing:0.05em}
+.t-price{color:var(--muted)}
+.t-up{color:var(--green)}
+.t-dn{color:var(--red)}
+@keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ─── STATS ─── */
+.stats-row{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border)}
+.stat{padding:3rem;border-right:1px solid var(--border);position:relative;overflow:hidden}
+.stat:last-child{border-right:none}
+.stat::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);transform:scaleX(0);transition:transform 0.5s}
+.stat:hover::after{transform:scaleX(1)}
+.stat-n{font-family:var(--font-display);font-weight:800;font-size:3.2rem;color:var(--white);letter-spacing:-0.06em;line-height:1;margin-bottom:0.5rem}
+.stat-n em{font-style:normal;color:var(--cyan)}
+.stat-l{font-family:var(--font-mono);font-size:0.64rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted)}
+
+/* ─── SECTION BASE ─── */
+section{padding:8rem 4rem;position:relative}
+.sec-tag{font-family:var(--font-mono);font-size:0.64rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--cyan);margin-bottom:1rem;display:flex;align-items:center;gap:0.7rem}
+.sec-tag::before{content:'';width:18px;height:1px;background:var(--cyan);flex-shrink:0}
+h2{font-family:var(--font-display);font-weight:800;font-size:clamp(2.2rem,4.5vw,3.8rem);color:var(--white);letter-spacing:-0.05em;line-height:1;margin-bottom:1.2rem}
+.sec-lead{color:var(--muted);font-size:0.98rem;line-height:1.85;max-width:500px;margin-bottom:4rem}
+
+/* ─── SCANNERS ─── */
+#scanners{background:var(--dark)}
+.scanner-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border)}
+.sc-card{background:var(--card);padding:2.8rem;transition:background 0.3s;position:relative;overflow:hidden}
+.sc-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0;transition:opacity 0.4s}
+.sc-card:hover{background:var(--card2)}
+.sc-card:hover::before{opacity:1}
+.sc-icon{font-size:1.4rem;margin-bottom:1.6rem;display:block}
+.sc-title{font-family:var(--font-display);font-weight:700;font-size:1.05rem;color:var(--white);margin-bottom:0.6rem;letter-spacing:-0.02em}
+.sc-desc{font-size:0.83rem;color:var(--muted);line-height:1.75}
+.badge{display:inline-block;margin-top:1.2rem;font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;padding:0.22rem 0.6rem;border:1px solid var(--border2);color:var(--muted)}
+.badge-live{border-color:rgba(29,221,138,0.5);color:var(--green)}
+.badge-soon{border-color:rgba(245,192,24,0.4);color:var(--gold)}
+
+/* ─── SIGNALS SECTION ─── */
+#signals-sec{background:var(--black)}
+.sig-layout{display:grid;grid-template-columns:1.2fr 1fr;gap:5rem;align-items:start}
+
+/* signal table */
+.sig-table{border:1px solid var(--border);overflow:hidden}
+.sig-thead{display:grid;grid-template-columns:2fr 0.8fr 1fr 0.8fr 1fr;padding:0.8rem 1.4rem;background:var(--dark);border-bottom:1px solid var(--border)}
+.sig-thead span{font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted)}
+.sig-row{display:grid;grid-template-columns:2fr 0.8fr 1fr 0.8fr 1fr;padding:1.1rem 1.4rem;border-bottom:1px solid var(--border);align-items:center;cursor:pointer;transition:background 0.2s}
+.sig-row:hover{background:rgba(0,229,200,0.03)}
+.sig-row:last-child{border-bottom:none}
+.sig-stock{font-family:var(--font-display);font-weight:700;font-size:0.95rem;color:var(--white)}
+.sig-score{font-family:var(--font-mono);font-size:0.82rem;color:var(--cyan);font-weight:500}
+.sig-price,.sig-rr{font-family:var(--font-mono);font-size:0.78rem;color:var(--text)}
+.sig-tag{display:inline-block;font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.2rem 0.5rem;background:rgba(29,221,138,0.08);color:var(--green);border:1px solid rgba(29,221,138,0.25)}
+
+/* checklist */
+.checklist{display:flex;flex-direction:column;gap:0.7rem}
+.ck-item{display:flex;align-items:flex-start;gap:1rem;padding:1.1rem 1.4rem;border:1px solid var(--border);background:var(--card);transition:border-color 0.2s}
+.ck-item:hover{border-color:rgba(0,229,200,0.25)}
+.ck-dot{width:7px;height:7px;flex-shrink:0;margin-top:0.3rem}
+.ck-dot-g{background:var(--green)}
+.ck-dot-y{background:var(--gold)}
+.ck-dot-r{background:var(--red)}
+.ck-body{font-size:0.83rem;line-height:1.65;color:var(--text)}
+.ck-body strong{color:var(--white);font-weight:500}
+
+/* ─── DASHBOARD PREVIEW ─── */
+#dashboard{background:var(--dark)}
+.dash-wrap{border:1px solid var(--border);overflow:hidden}
+.dash-topbar{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.5rem;background:var(--black);border-bottom:1px solid var(--border)}
+.dash-title{font-family:var(--font-mono);font-size:0.7rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted)}
+.dash-status{display:flex;align-items:center;gap:0.5rem;font-family:var(--font-mono);font-size:0.65rem;color:var(--green)}
+.dash-status::before{content:'';width:6px;height:6px;background:var(--green);border-radius:50%;animation:pulse 2s infinite}
+.dash-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:var(--border)}
+.dash-metric{background:var(--card);padding:1.5rem 1.8rem}
+.dash-metric-label{font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:0.4rem}
+.dash-metric-value{font-family:var(--font-display);font-weight:700;font-size:1.6rem;color:var(--white);letter-spacing:-0.04em}
+.dash-metric-value.green{color:var(--green)}
+.dash-metric-value.red{color:var(--red)}
+.dash-metric-sub{font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);margin-top:0.2rem}
+
+/* market bar */
+.market-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border)}
+.market-item{background:var(--card2);padding:1.2rem 1.5rem}
+.mi-label{font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:0.3rem}
+.mi-value{font-family:var(--font-display);font-weight:700;font-size:1.1rem;color:var(--white);letter-spacing:-0.03em}
+.mi-chg{font-family:var(--font-mono);font-size:0.65rem;margin-top:0.15rem}
+
+/* ─── PRICING ─── */
+#pricing{background:var(--black)}
+.price-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border)}
+.p-card{background:var(--card);padding:2.8rem 2.2rem;position:relative;transition:background 0.3s}
+.p-card:hover{background:var(--card2)}
+.p-card.hot{background:rgba(0,229,200,0.04)}
+.p-card.hot::before{content:'POPULAR';position:absolute;top:1.2rem;right:1.2rem;font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.15em;color:var(--cyan);border:1px solid rgba(0,229,200,0.35);padding:0.2rem 0.55rem}
+.p-plan{font-family:var(--font-mono);font-size:0.64rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:1.2rem}
+.p-price{font-family:var(--font-display);font-weight:800;font-size:2.8rem;color:var(--white);letter-spacing:-0.06em;line-height:1;margin-bottom:0.4rem}
+.p-price .sym{font-size:1.4rem;color:var(--cyan);vertical-align:top;margin-top:0.3rem;display:inline-block}
+.p-price .per{font-family:var(--font-body);font-size:0.85rem;color:var(--muted);font-weight:300;letter-spacing:0}
+.p-desc{font-size:0.8rem;color:var(--muted);line-height:1.65;margin-bottom:2rem;min-height:2.4rem}
+.p-list{list-style:none;display:flex;flex-direction:column;gap:0.65rem;margin-bottom:2.2rem}
+.p-list li{font-size:0.82rem;color:var(--text);display:flex;gap:0.6rem;align-items:flex-start;line-height:1.5}
+.p-list li::before{content:'→';color:var(--cyan);font-family:var(--font-mono);font-size:0.72rem;flex-shrink:0;margin-top:0.05rem}
+.p-btn{width:100%;padding:0.9rem;font-family:var(--font-mono);font-size:0.68rem;letter-spacing:0.1em;text-transform:uppercase;border:1px solid var(--border2);background:transparent;color:var(--text);cursor:pointer;transition:all 0.2s}
+.p-btn:hover{border-color:var(--cyan);color:var(--cyan)}
+.p-btn-hot{background:var(--cyan);border-color:var(--cyan);color:var(--black);font-weight:500}
+.p-btn-hot:hover{background:var(--green);border-color:var(--green)}
+
+/* ─── ROADMAP ─── */
+#roadmap{background:var(--dark)}
+.road-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);margin-top:3.5rem}
+.road-card{background:var(--card);padding:2.8rem}
+.road-phase{font-family:var(--font-mono);font-size:0.62rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--muted);margin-bottom:0.5rem}
+.road-title{font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--white);margin-bottom:0.3rem;letter-spacing:-0.02em}
+.road-time{font-family:var(--font-mono);font-size:0.68rem;color:var(--cyan);letter-spacing:0.06em;margin-bottom:2rem}
+.road-list{list-style:none;display:flex;flex-direction:column;gap:0.65rem}
+.road-list li{font-size:0.83rem;color:var(--text);display:flex;gap:0.7rem;align-items:flex-start;line-height:1.5}
+.road-list li .d{width:5px;height:5px;background:var(--cyan);border-radius:50%;flex-shrink:0;margin-top:0.45rem}
+.road-status{display:inline-block;margin-top:1.8rem;font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.15em;text-transform:uppercase;padding:0.25rem 0.7rem;border:1px solid}
+.rs-active{border-color:rgba(29,221,138,0.5);color:var(--green)}
+.rs-next{border-color:rgba(245,192,24,0.4);color:var(--gold)}
+.rs-plan{border-color:var(--border2);color:var(--muted)}
+
+/* ─── CTA ─── */
+#cta-sec{background:var(--black);text-align:center;padding:10rem 4rem;position:relative;overflow:hidden}
+#cta-sec::before{content:'';position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:800px;height:400px;background:radial-gradient(ellipse,rgba(0,229,200,0.07) 0%,transparent 65%);pointer-events:none}
+#cta-sec h2{margin:0 auto 1.5rem;max-width:700px}
+#cta-sec p{color:var(--muted);font-size:1rem;margin-bottom:3.5rem;line-height:1.8;max-width:500px;margin-left:auto;margin-right:auto}
+.cta-actions{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+
+/* ─── FOOTER ─── */
+footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-template-columns:1fr 1fr 1fr;gap:2rem;align-items:center}
+.f-logo{font-family:var(--font-display);font-weight:800;font-size:1.15rem;color:var(--white)}
+.f-logo em{font-style:normal;color:var(--cyan)}
+.f-tagline{font-family:var(--font-mono);font-size:0.62rem;letter-spacing:0.1em;color:var(--muted);margin-top:0.4rem}
+.f-links{display:flex;gap:2rem;justify-content:center;list-style:none;flex-wrap:wrap}
+.f-links a{font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);text-decoration:none;letter-spacing:0.1em;text-transform:uppercase;transition:color 0.2s}
+.f-links a:hover{color:var(--cyan)}
+.f-right{text-align:right}
+.f-copy{font-family:var(--font-mono);font-size:0.6rem;color:var(--muted);letter-spacing:0.05em;line-height:1.8}
+.f-disclaimer{font-family:var(--font-mono);font-size:0.58rem;color:var(--border2);margin-top:0.4rem;letter-spacing:0.03em}
+
+/* ─── DASHBOARD APP OVERLAY ─── */
+#app{display:none;position:fixed;inset:0;background:var(--black);z-index:800;overflow-y:auto}
+#app.open{display:block}
+.app-nav{display:flex;align-items:center;justify-content:space-between;padding:1rem 2rem;background:var(--dark);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10}
+.app-logo{font-family:var(--font-display);font-weight:800;font-size:1.1rem;color:var(--white)}
+.app-logo em{font-style:normal;color:var(--cyan)}
+.app-tabs{display:flex;gap:0}
+.app-tab{font-family:var(--font-mono);font-size:0.65rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.6rem 1.2rem;background:transparent;border:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all 0.2s}
+.app-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.app-close{font-family:var(--font-mono);font-size:0.68rem;color:var(--muted);background:transparent;border:1px solid var(--border);padding:0.4rem 0.8rem;cursor:pointer;letter-spacing:0.1em;text-transform:uppercase;transition:all 0.2s}
+.app-close:hover{border-color:var(--red);color:var(--red)}
+
+/* ── AUTH MODAL ─────────────────────────────────────────────── */
+#auth-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+#auth-overlay.open{display:flex}
+.auth-box{background:#0d1117;border:1px solid #1e2836;width:100%;max-width:420px;padding:2.5rem;position:relative;animation:authSlide 0.2s ease}
+@keyframes authSlide{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
+.auth-logo{font-family:var(--font-display);font-weight:800;font-size:1.2rem;color:var(--white);margin-bottom:0.4rem}
+.auth-logo em{font-style:normal;color:var(--cyan)}
+.auth-tagline{font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:2rem}
+.auth-tabs{display:flex;gap:0;margin-bottom:1.8rem;border-bottom:1px solid #1e2836}
+.auth-tab{font-family:var(--font-mono);font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.6rem 1.2rem;background:transparent;border:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.2s}
+.auth-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.auth-field{margin-bottom:1.1rem}
+.auth-label{font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;display:block;margin-bottom:0.4rem}
+.auth-input{width:100%;background:#080b0e;border:1px solid #1e2836;color:var(--white);font-family:var(--font-mono);font-size:0.85rem;padding:0.75rem 1rem;outline:none;box-sizing:border-box;transition:border-color 0.2s}
+.auth-input:focus{border-color:var(--cyan)}
+.auth-btn{width:100%;background:var(--cyan);color:#000;font-family:var(--font-display);font-weight:700;font-size:0.85rem;padding:0.9rem;border:none;cursor:pointer;margin-top:0.5rem;transition:background 0.2s;letter-spacing:0.05em}
+.auth-btn:hover{background:var(--green)}
+.auth-btn:disabled{background:var(--muted);cursor:not-allowed}
+.auth-error{font-family:var(--font-mono);font-size:0.72rem;color:#ff4560;margin-top:0.8rem;min-height:1.2rem;text-align:center}
+.auth-success{font-family:var(--font-mono);font-size:0.72rem;color:#1ddd8a;margin-top:0.8rem;text-align:center}
+.auth-switch{font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);text-align:center;margin-top:1.2rem}
+.auth-switch span{color:var(--cyan);cursor:pointer;text-decoration:underline}
+.auth-close{position:absolute;top:1rem;right:1rem;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:1rem;line-height:1}
+.auth-close:hover{color:var(--red)}
+/* plan badge in app header */
+.plan-badge{font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;padding:3px 8px;border-radius:3px;background:#00e5c815;color:var(--cyan);border:1px solid #00e5c830}
+.plan-badge.free{background:#f5c01815;color:#f5c018;border-color:#f5c01830}
+.plan-badge.pro{background:#a855f715;color:#a855f7;border-color:#a855f730}
+.plan-badge.elite{background:#ff456015;color:#ff4560;border-color:#ff456030}
+/* user info strip in app header */
+#auth-user-strip{display:none;align-items:center;gap:0.6rem;font-family:var(--font-mono);font-size:0.65rem;color:var(--muted)}
+#auth-user-strip.show{display:flex}
+#auth-logout-btn{background:transparent;border:1px solid #1e2836;color:var(--muted);font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;padding:3px 8px;cursor:pointer;transition:all 0.2s}
+#auth-logout-btn:hover{border-color:var(--red);color:var(--red)}
+.app-body{padding:2rem;max-width:1400px;margin:0 auto}
+
+/* app cards */
+.app-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
+.app-card{background:var(--card);border:1px solid var(--border);padding:1.5rem}
+.app-card-label{font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:0.5rem}
+.app-card-val{font-family:var(--font-display);font-weight:700;font-size:1.8rem;color:var(--white);letter-spacing:-0.04em}
+.app-card-val.g{color:var(--green)}
+.app-card-val.r{color:var(--red)}
+.app-card-val.c{color:var(--cyan)}
+.app-card-sub{font-family:var(--font-mono);font-size:0.62rem;color:var(--muted);margin-top:0.3rem}
+
+/* news card */
+.news-card {
+  background:#0d1117;
+  border:1px solid #1e2836;
+  padding:16px;
+  border-radius:8px;
+  cursor:pointer;
+  transition:all 0.2s ease;
+}
+
+/* app signal table */
+
+.app-table{
+  background:var(--card);
+  border:1px solid var(--border);
+  overflow-x:auto;       /* horizontal scroll on mobile */
+  overflow-y:hidden;
+  margin-bottom:1.5rem;
+  -webkit-overflow-scrolling:touch; /* smooth scroll on iOS */
+}
+.app-table-head{
+  display:grid;
+  grid-template-columns:1.6fr 0.8fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1.2fr;
+  padding:1rem 1.2rem;
+  background:var(--dark);
+  border-bottom:1px solid var(--border);
+  min-width:900px;       /* never shrink below this — forces scroll */
+}
+.app-table-head span{
+  font-family:var(--font-mono);
+  font-size:0.65rem;
+  letter-spacing:0.12em;
+  text-transform:uppercase;
+  color:var(--muted);
+  text-align:center;
+}
+/* FIRST COLUMN LEFT */
+.app-table-head span:first-child{
+  text-align:left;
+  padding-left:10px;
+}
+
+/* ROW */
+.app-row{
+  display:grid;
+  grid-template-columns:1.6fr 0.8fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1.2fr;
+  padding:1rem 1.2rem;
+  border-bottom:1px solid var(--border);
+  align-items:center;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  min-width:900px;       /* matches header — forces horizontal scroll on mobile */
+}
+
+.app-row:hover{
+  /*background:rgba(255,255,255,0.04);*/
+  background: rgba(0, 229, 200, 0.08);
+}
+.app-row:hover .ar-stock {
+    color: #00E5C8;
+}
+.app-row:last-child{
+  border-bottom:none;
+}
+/* STOCK */
+.ar-stock{
+  font-family:var(--font-display);
+  font-weight:700;
+  font-size:0.95rem;
+  color:var(--white);
+  text-align:left;
+  padding-left:10px;
+}
+.ar-stock:hover{
+  color: var(--cyan);
+  cursor: pointer;
+}
+/* SCORE */
+.ar-score{
+  font-family:var(--font-mono);
+  font-size:0.8rem;
+  color:var(--cyan);
+  text-align:center;
+}
+
+/* VALUES */
+.ar-val{
+  font-family:var(--font-mono);
+  font-size:0.82rem;
+  color:var(--text);
+  text-align:center;
+}
+
+.ar-val button {
+  width: 100%;
+}
+/* ENTRY / SL / TARGET COLORS */
+.ar-entry{
+  color:#cfd8dc;
+}
+.ar-sl{
+  color:#ff4d4f;
+  font-weight:500;
+}
+.ar-target{
+  color:#00e676;
+  font-weight:500;
+}
+/* BUTTON */
+.ar-btn{
+  font-family:var(--font-mono);
+  font-size:0.65rem;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  padding:0.4rem 0.8rem;
+  background:rgba(0,229,200,0.08);
+  border:1px solid rgba(0,229,200,0.25);
+  color:var(--cyan);
+  cursor:pointer;
+  transition:all 0.2s;
+  text-align:center;
+}
+.ar-btn:hover{
+  background:rgba(0,229,200,0.2);
+}
+/* scan button */
+.scan-btn{display:flex;align-items:center;gap:0.8rem;background:var(--cyan);color:var(--black);font-family:var(--font-display);font-weight:700;font-size:0.88rem;padding:0.9rem 2rem;border:none;cursor:pointer;transition:all 0.2s;margin-bottom:1.5rem}
+.scan-btn:hover{background:var(--green)}
+.scan-btn:disabled{background:var(--muted);cursor:not-allowed}
+.scan-loader{width:14px;height:14px;border:2px solid rgba(0,0,0,0.3);border-top-color:var(--black);border-radius:50%;animation:spin 0.6s linear infinite;display:none}
+.scan-loader.show{display:block}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ─── ANIMATIONS ─── */
+.reveal{opacity:0;transform:translateY(28px);transition:opacity 0.75s ease,transform 0.75s ease}
+.reveal.on{opacity:1;transform:none}
+
+/* ─── RESPONSIVE ─── */
+@media(max-width:1024px){
+  nav{padding:1rem 1.5rem}
+  .nav-links{display:none}
+  section{padding:5rem 1.5rem}
+  #hero{padding:7rem 1.5rem 4rem}
+  .stats-row{grid-template-columns:repeat(2,1fr)}
+  .scanner-grid{grid-template-columns:repeat(2,1fr)}
+  .sig-layout{grid-template-columns:1fr}
+  .price-grid{grid-template-columns:repeat(2,1fr)}
+  .road-grid{grid-template-columns:1fr}
+  footer{grid-template-columns:1fr;text-align:center}
+  .f-right{text-align:center}
+  .f-links{justify-content:center}
+  .app-grid{grid-template-columns:repeat(2,1fr)}
+}
+
+/* ── MOBILE SIGNAL CARD — hidden, not used ── */
+.mobile-signal-card{
+  display:none !important;
+}
+</style>
+</head>
+<body>
+
+<div id="cursor"></div>
+<div id="cursor-ring"></div>
+
+<!-- ═══════════ NAV ═══════════ -->
+<nav id="nav">
+  <a href="#" class="logo">TAKSHVI<em>.</em>TRADE</a>
+  <ul class="nav-links">
+    <li><a href="#scanners">Scanners</a></li>
+    <li><a href="#signals-sec">Signals</a></li>
+    <li><a href="#dashboard">Dashboard</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+  </ul>
+  <div class="nav-right">
+    <button class="btn-nav" onclick="navLoginClick()" id="nav-login-btn">Log In</button>
+    <a href="#pricing" class="btn-nav btn-nav-solid">Start Free</a>
+  </div>
+</nav>
+
+<!-- ═══════════ HERO ═══════════ -->
+<section id="hero">
+  <div class="hero-mesh"></div>
+  <div class="hero-grid"></div>
+
+  <div class="nifty-badge" id="nifty-badge">
+    <div class="nifty-dot dot-red" id="nifty-dot"></div>
+    <span class="nifty-text">
+      NIFTY50
+      <strong id="nifty-price" style="margin-left:4px">--</strong>
+      <span id="nifty-verdict" style="margin-left:6px;font-size:0.85em"></span>
+    </span>
+  </div>
+
+  <div class="eyebrow">NSE Swing Signal Intelligence · takshvitrade.com</div>
+  <h1>Trade with<br/><span class="accent">precision.</span></h1>
+  <p class="hero-body">ATR-adaptive stops. Multi-factor scoring. 6-point pre-approval. Groww-ready order sheets — all automated, every trading day.</p>
+
+  <div class="hero-actions">
+    <a href="#pricing" class="btn-primary">Start Free — ₹0</a>
+    <button class="btn-ghost" onclick="openApp()">Open Dashboard →</button>
+  </div>
+</section>
+
+<!-- ═══════════ TICKER ═══════════ -->
+<div class="ticker-wrap">
+  <div class="ticker-track" id="ticker"></div>
+</div>
+
+<!-- ═══════════ STATS ═══════════ -->
+<div class="stats-row">
+  <div class="stat reveal"><div class="stat-n">50<em>+</em></div><div class="stat-l">Stocks Scanned Daily</div></div>
+  <div class="stat reveal"><div class="stat-n">2<em>:1</em></div><div class="stat-l">Minimum RR Ratio</div></div>
+  <div class="stat reveal"><div class="stat-n">6</div><div class="stat-l">Pre-Approval Checks</div></div>
+  <div class="stat reveal"><div class="stat-n">₹<em>0</em></div><div class="stat-l">To Get Started</div></div>
+</div>
+
+<!-- ═══════════ SCANNERS ═══════════ -->
+<section id="scanners">
+  <div class="sec-tag">What We Scan</div>
+  <h2>Six scanners.<br/>One platform.</h2>
+  <p class="sec-lead">Each scanner is purpose-built for Indian markets — NSE data, INR pricing, trade-compatible output.</p>
+  <div class="scanner-grid reveal">
+    <div class="sc-card"><span class="sc-icon">📈</span><div class="sc-title">Swing Scanner</div><div class="sc-desc">EMA stack + RSI + volume + 52W high proximity. ATR-based stops that adapt to each stock's volatility. Scores 0–100 with multi-factor engine.</div><span class="badge badge-live">● Live</span></div>
+    <div class="sc-card"><span class="sc-icon">⚡</span><div class="sc-title">Intraday Scanner</div><div class="sc-desc">5-min OHLCV candles, VWAP deviation signals, RSI momentum bursts. Built for 9:15–3:30 PM execution on NSE.</div><span class="badge badge-soon">Coming Phase 3</span></div>
+    <div class="sc-card"><span class="sc-icon">📊</span><div class="sc-title">F&O Signals</div><div class="sc-desc">Open interest buildup, Put-Call ratio, IV rank. Spot high-conviction options setups before the crowd does.</div><span class="badge badge-soon">Coming Phase 3</span></div>
+    <div class="sc-card"><span class="sc-icon">₿</span><div class="sc-title">Crypto Scanner</div><div class="sc-desc">Binance API — no key needed. Same multi-factor scoring on top crypto pairs. Scans 24/7, alerts via WhatsApp.</div><span class="badge badge-soon">Coming Phase 3</span></div>
+    <div class="sc-card"><span class="sc-icon">🏭</span><div class="sc-title">Sector Scanner</div><div class="sc-desc">Group stocks by NSE sector, rank by ATR momentum. Rotate capital into the strongest sector before the move.</div><span class="badge badge-soon">Coming Phase 3</span></div>
+    <div class="sc-card"><span class="sc-icon">💰</span><div class="sc-title">Dividend Tracker</div><div class="sc-desc">Yield, ex-date, payout history across NIFTY500. Never miss a high-yield ex-date again.</div><span class="badge badge-soon">Coming Phase 3</span></div>
+  </div>
+</section>
+
+<!-- ═══════════ SIGNALS ═══════════ -->
+<section id="signals-sec">
+  <div class="sec-tag">Signal Output</div>
+  <h2>Pre-approval.<br/>Every trade.</h2>
+  <p class="sec-lead">Before any order is generated, each candidate passes 6 checkpoints. No black boxes, no guesswork.</p>
+  <div class="sig-layout">
+  <div class="sig-table reveal">
+   <div class="sig-thead">
+    <span>Stock</span>
+    <span>Score</span>
+    <span>Entry ₹</span>
+    <span>RR</span>
+    <span>Signal</span>
+  </div>
+  <div style="padding:2rem;text-align:center;font-family:var(--font-mono);font-size:0.75rem;color:var(--muted)">
+    Open Dashboard → Run Scanner to see live signals
+  </div>
+</div>
+    <div class="checklist reveal">
+      <div class="ck-item"><div class="ck-dot ck-dot-g"></div><div class="ck-body"><strong>EMA 20 &gt; 50 &gt; 200</strong> — Full bullish stack confirms the primary trend is up across all timeframes.</div></div>
+      <div class="ck-item"><div class="ck-dot ck-dot-g"></div><div class="ck-body"><strong>EMA 20 Rising</strong> — 3-candle confirmation. Short-term momentum is accelerating, not just flat.</div></div>
+      <div class="ck-item"><div class="ck-dot ck-dot-y"></div><div class="ck-body"><strong>RSI 50–70</strong> — Strong but not overbought. The ideal zone for trend continuation entries.</div></div>
+      <div class="ck-item"><div class="ck-dot ck-dot-g"></div><div class="ck-body"><strong>Volume &gt; 10-Day SMA</strong> — Institutional participation confirmed. Thin-volume moves are traps.</div></div>
+      <div class="ck-item"><div class="ck-dot ck-dot-g"></div><div class="ck-body"><strong>Candle: Bullish or Neutral</strong> — No bearish engulfing or shooting star at entry candle.</div></div>
+      <div class="ck-item"><div class="ck-dot ck-dot-r"></div><div class="ck-body"><strong>Pullback to EMA20</strong> — Low touched EMA20, close above it. The classic institutional bounce setup.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ DASHBOARD PREVIEW ═══════════ -->
+<section id="dashboard">
+  <div class="sec-tag">Live Dashboard</div>
+  <h2>Everything in<br/>one view.</h2>
+  <p class="sec-lead">Real-time signal table, market status, capital allocation, and Trade order sheets — refreshed every 15 minutes.</p>
+  <div class="dash-wrap reveal">
+    <div class="dash-topbar">
+      <span class="dash-title">Takshvi Trade · Dashboard</span>
+      <span class="dash-status">Live · Last scan 14:32 IST</span>
+    </div>
+    <div class="dash-grid">
+      <div class="dash-metric"><div class="dash-metric-label">Capital Deployed</div><div class="dash-metric-value green">--</div><div class="dash-metric-sub">of ₹1,00,000 available</div></div>
+      <div class="dash-metric"><div class="dash-metric-label">Signals Today</div><div class="dash-metric-value c">5</div><div class="dash-metric-sub">3 approved · 2 pending</div></div>
+      <div class="dash-metric"><div class="dash-metric-label">Avg Score</div><div class="dash-metric-value">76</div><div class="dash-metric-sub">out of 100 possible</div></div>
+    </div>
+   <div class="market-bar">
+
+    <div class="market-item">
+    <div class="mi-label">NIFTY50</div>
+    <div class="mi-value" id="dashboard-nifty-price">--</div>
+    <div class="mi-chg" id="nifty-change">--</div>
+   </div>
+   <div class="market-item">
+    <div class="mi-label">Market Trend</div>
+    <div class="mi-value" id="market-trend">--</div>
+    <div class="mi-chg" id="market-note">--</div>
+   </div>
+   <div class="market-item">
+    <div class="mi-label">Signal Strength</div>
+    <div class="mi-value" id="signal-strength">--</div>
+    <div class="mi-chg">Based on top trades</div>
+   </div>
+   <div class="market-item">
+    <div class="mi-label">System Status</div>
+    <div class="mi-value" id="system-status">READY</div>
+    <div class="mi-chg">Scanner active</div>
+    </div>
+</div>
+</section>
+
+<!-- ═══════════ PRICING ═══════════ -->
+<section id="pricing">
+  <div class="sec-tag">Subscription Plans</div>
+  <h2>Start free.<br/>Scale when ready.</h2>
+  <p class="sec-lead">No credit card to start. Razorpay for India, Stripe for international.</p>
+  <div class="price-grid reveal">
+    <div class="p-card">
+      <div class="p-plan">Free</div>
+      <div class="p-price"><span class="sym">₹</span>0</div>
+      <div class="p-desc">3 signals/day · swing only · 15-min delay</div>
+      <ul class="p-list"><li>Swing scanner access</li><li>3 signals per day</li><li>15-minute delay</li><li>Dashboard view</li></ul>
+      <button class="p-btn" onclick="openApp()">Get Started</button>
+    </div>
+    <div class="p-card hot">
+      <div class="p-plan">Basic</div>
+      <div class="p-price"><span class="sym">₹</span>299<span class="per">/mo</span></div>
+      <div class="p-desc">All swing + intraday · WhatsApp alerts</div>
+      <ul class="p-list"><li>Unlimited swing signals</li><li>Intraday scanner</li><li>Real-time alerts</li><li>WhatsApp via Twilio</li><li>Trade order sheets</li></ul>
+      <button class="p-btn p-btn-hot">Subscribe — Razorpay</button>
+    </div>
+    <div class="p-card">
+      <div class="p-plan">Pro</div>
+      <div class="p-price"><span class="sym">₹</span>799<span class="per">/mo</span></div>
+      <div class="p-desc">F&O + crypto + sector + dividend</div>
+      <ul class="p-list"><li>Everything in Basic</li><li>F&O signals</li><li>Crypto scanner (Binance)</li><li>Sector rotation alerts</li><li>Dividend tracker</li></ul>
+      <button class="p-btn">Upgrade to Pro</button>
+    </div>
+    <div class="p-card">
+      <div class="p-plan">Elite</div>
+      <div class="p-price"><span class="sym">₹</span>1,999<span class="per">/mo</span></div>
+      <div class="p-desc">API access + custom alerts + priority</div>
+      <ul class="p-list"><li>Everything in Pro</li><li>Full REST API access</li><li>Custom alert rules</li><li>Webhook integrations</li><li>Priority support</li></ul>
+      <button class="p-btn">Go Elite</button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ ROADMAP ═══════════ -->
+<section id="roadmap">
+  <div class="sec-tag">Build Roadmap</div>
+  <h2>Where we are.<br/>Where we're going.</h2>
+  <div class="road-grid reveal">
+    <div class="road-card">
+      <div class="road-phase">Phase 01</div>
+      <div class="road-title">Build Free, Launch Fast</div>
+      <div class="road-time">Month 1–2</div>
+      <ul class="road-list">
+        <li><span class="d"></span>Swing scanner (live)</li>
+        <li><span class="d"></span>FastAPI backend</li>
+        <li><span class="d"></span>React + Next.js dashboard</li>
+        <li><span class="d"></span>Supabase DB + JWT auth</li>
+        <li><span class="d"></span>WhatsApp via Twilio</li>
+        <li><span class="d"></span>TradingView charts</li>
+      </ul>
+      <span class="road-status rs-active">● In Progress</span>
+    </div>
+    <div class="road-card">
+      <div class="road-phase">Phase 02</div>
+      <div class="road-title">Mobile App</div>
+      <div class="road-time">Month 3–4</div>
+      <ul class="road-list">
+        <li><span class="d"></span>React Native app</li>
+        <li><span class="d"></span>70% code shared with web</li>
+        <li><span class="d"></span>Firebase push notifications</li>
+        <li><span class="d"></span>Biometric login</li>
+        <li><span class="d"></span>Offline cached signals</li>
+        <li><span class="d"></span>Play Store ($25 one-time)</li>
+      </ul>
+      <span class="road-status rs-next">◎ Next Up</span>
+    </div>
+    <div class="road-card">
+      <div class="road-phase">Phase 03</div>
+      <div class="road-title">Revenue & Scale</div>
+      <div class="road-time">Month 5+</div>
+      <ul class="road-list">
+        <li><span class="d"></span>Razorpay integration</li>
+        <li><span class="d"></span>Stripe international</li>
+        <li><span class="d"></span>F&O + crypto scanners</li>
+        <li><span class="d"></span>Sector + dividend trackers</li>
+        <li><span class="d"></span>Full API tier for devs</li>
+        <li><span class="d"></span>Webhook subscription mgmt</li>
+      </ul>
+      <span class="road-status rs-plan">○ Planned</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ CTA ═══════════ -->
+<section id="cta-sec">
+  <div class="sec-tag" style="justify-content:center">Ready?</div>
+  <h2>Your first 3 signals<br/>are free. Always.</h2>
+  <p>No credit card. No lock-in. Just data-driven swing trades backed by ATR volatility and a 6-point pre-approval system.</p>
+  <div class="cta-actions">
+    <button class="btn-primary" onclick="openApp()">Open Dashboard — Free</button>
+    <a href="#scanners" class="btn-ghost">Explore Scanners</a>
+  </div>
+</section>
+
+<!-- ═══════════ FOOTER ═══════════ -->
+<footer>
+  <div>
+    <div class="f-logo">TAKSHVI<em>.</em>TRADE</div>
+    <div class="f-tagline">takshvitrade.com · takshvitrade.in</div>
+  </div>
+  <ul class="f-links">
+    <li><a href="#scanners">Scanners</a></li>
+    <li><a href="#signals-sec">Signals</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+    <li><a href="#">Privacy</a></li>
+    <li><a href="#">Terms</a></li>
+  </ul>
+  <div class="f-right">
+    <div class="f-copy">© 2026 Takshvi Trade. All rights reserved.</div>
+    <div class="f-disclaimer">NSE data via yfinance. Not SEBI registered. Trade at your own risk.</div>
+  </div>
+</footer>
+
+<!-- ═══════════ DASHBOARD APP ═══════════ -->
+<div id="app">
+  <div class="app-nav">
+    <div class="app-logo">TAKSHVI<em>.</em>TRADE</div>
+    <div class="app-tabs">
+      <button class="app-tab active" onclick="showTab('signals')">Signals</button>
+      <button class="app-tab" onclick="showTab('market')">Market</button>
+      <button class="app-tab" onclick="showTab('trade')">Trade Panel</button>
+      <button class="app-tab" onclick="showTab('news')">News</button>
+    </div>
+    <!-- User strip — shown when logged in -->
+    <div id="auth-user-strip">
+      <span id="auth-user-email" style="color:#5a7a96"></span>
+      <span id="auth-plan-badge" class="plan-badge free">FREE</span>
+      <button id="auth-logout-btn" onclick="authLogout()">Logout</button>
+    </div>
+    <button class="app-close" onclick="closeApp()">✕ Close</button>
+  </div>
+
+  <div class="app-body">
+
+    <!-- Signals Tab -->
+     
+<div id="tab-signals">
+  <!-- TOP CARDS -->
+  <div class="app-grid">
+    <div class="app-card">
+      <div class="app-card-label">Capital</div>
+      <div class="app-card-val c" id="capital-display">—</div>
+      <div class="app-card-sub">Enter capital below</div>
+    </div>
+    <div class="app-card">
+      <div class="app-card-label">Deployed</div>
+      <div class="app-card-val" id="capital-deployed">—</div>
+      <div class="app-card-sub">After scan runs</div>
+    </div>
+    <div class="app-card">
+      <div class="app-card-label">Signals Found</div>
+      <div class="app-card-val g" id="sig-count">—</div>
+      <div class="app-card-sub" id="sig-label">Passed all filters</div>
+    </div>
+    <div class="app-card">
+      <div class="app-card-label">Market</div>
+      <div class="app-card-val" id="market-status">—</div>
+      <div class="app-card-sub" id="market-sub">Run scanner first</div>
+    </div>
+  </div>
+  <!-- INPUT -->
+  <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem">
+    <label style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);letter-spacing:0.1em">
+      CAPITAL (₹)
+    </label>
+    <input id="capital-input" type="number"
+      placeholder="Enter your capital ₹"
+      min="10000"
+      step="5000"
+      style="background:var(--card);
+             border:1px solid var(--border2);
+             color:var(--white);
+             font-family:var(--font-mono);
+             font-size:0.85rem;
+             padding:0.6rem 1rem;
+             width:160px;
+             outline:none"/>
+  </div>
+  <!-- SCAN BUTTON -->
+  <button class="scan-btn" id="scan-btn" onclick="runScan()">
+    <div class="scan-loader" id="scan-loader"></div>
+    <span id="scan-label">▶ Run Scanner</span>
+  </button>
+
+  <!-- TABLE TOOLBAR — professional placement for Export CSV (like Zerodha/TradingView) -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;margin-top:0.25rem">
+    <span style="font-family:var(--font-mono);font-size:0.6rem;color:var(--muted);letter-spacing:0.14em;text-transform:uppercase">
+      Scan Results
+    </span>
+    <button
+      onclick="downloadCSV()"
+      title="Export signals to CSV"
+      style="font-family:var(--font-mono);font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;
+             padding:0.38rem 0.85rem;background:transparent;border:1px solid var(--border2);
+             color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:0.4rem;
+             transition:all 0.2s;"
+      onmouseover="this.style.borderColor='var(--cyan)';this.style.color='var(--cyan)'"
+      onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted)'">
+      ↓ Export CSV
+    </button>
+  </div>
+  <!-- TABLE -->
+  <div class="app-table">
+    <div class="app-table-head">
+      <span>Stock</span>
+      <span>Score</span>
+      <span>Entry ₹</span>
+      <span>SL ₹</span>
+      <span>Target ₹</span>
+      <span>RR</span>
+      <span>Qty</span>
+      <span>Position ₹</span>  
+      <span>Action</span>
+    </div>
+<div id="signals-body">
+    <div style="text-align:center;padding:2rem;color:var(--muted);font-family:var(--font-mono);font-size:0.75rem">
+    Click Run Scanner to load live signals
+    </div>
+  </div>
+  </div>
+  </div>
+    <!-- Market Tab -->
+  <div id="tab-market" style="display:none">
+   <div class="app-grid">
+    <div class="app-card">
+      <div class="app-card-label">NIFTY50 Price</div>
+      <div class="app-card-val" id="app-nifty-price">--</div>
+      <div class="app-card-sub">Live data</div>
+    </div>
+    <div class="app-card">
+      <div class="app-card-label">Trend</div>
+      <div class="app-card-val" id="app-market-trend">--</div>
+      <div class="app-card-sub">Based on price movement</div>
+    </div>
+    <div class="app-card">
+      <div class="app-card-label">Signal Strength</div>
+      <div class="app-card-val" id="app-signal-strength">--</div>
+      <div class="app-card-sub">From scanner</div>
+    </div>
+    <div class="app-card">
+      <div class="app-card-label">System</div>
+      <div class="app-card-val" style="color:var(--green)">ACTIVE</div>
+      <div class="app-card-sub">Ready to trade</div>
+    </div>
+  </div>
+</div>
+    <!-- Trade Panel Tab -->
+    <div id="tab-trade" style="display:none">
+      <div id="trade-content">
+        <div class="app-table" style="padding:2rem">
+          <div style="font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--white);margin-bottom:0.5rem">Trade Execution Panel</div>
+          <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);margin-bottom:1.5rem">Click "trade →" on any signal row to generate step-by-step Trade instructions</div>
+          <div style="font-family:var(--font-mono);font-size:0.8rem;color:var(--cyan)">← Select a signal from the Signals tab first</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-news" style="display:none">
+
+  <!-- 🔥 MARKET SENTIMENT FIRST -->
+  <div class="app-table" style="padding:2rem">
+    <div style="font-family:var(--font-display);font-weight:700;font-size:1.2rem;color:var(--white);margin-bottom:1.5rem">
+      📰 Market News Sentiment
+    </div>
+
+    <!-- SENTIMENT CARDS -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.5rem">
+
+      <div class="app-card">
+        <div class="app-card-label">Positive Signals</div>
+        <div class="app-card-val g" id="positive-news">0</div>
+      </div>
+
+      <div class="app-card">
+        <div class="app-card-label">Negative Signals</div>
+        <div class="app-card-val r" id="negative-news">0</div>
+      </div>
+
+      <div class="app-card">
+        <div class="app-card-label">Verdict</div>
+        <div class="app-card-val" id="news-verdict">--</div>
+      </div>
+
+    </div>
+
+    <div style="font-family:var(--font-mono);font-size:0.75rem;color:var(--muted);line-height:2">
+      Sources: Economic Times · Moneycontrol · Reuters · Mint<br/>
+      Recommendation: <span id="news-recommendation" style="color:var(--gold)">Loading market context...</span>
+    </div>
+  </div>
+
+  <!-- 🔥 THEN TOP STORIES -->
+  <h2 style="margin:30px 0 10px 0;">Top stories</h2>
+
+  <div id="news-container" style="
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap:20px;
+  "></div>
+</div>
+
+<script>
+/* ─── Cursor ─── */
+const API = "https://api.takshvitrade.com";
+
+const cur = document.getElementById('cursor');
+const ring = document.getElementById('cursor-ring');
+let mx=0,my=0,rx=0,ry=0;
+document.addEventListener('mousemove',e=>{
+  mx=e.clientX; my=e.clientY;
+  cur.style.left=(mx-4)+'px'; cur.style.top=(my-4)+'px';
+});
+function animRing(){
+  rx+=(mx-rx)*0.12; ry+=(my-ry)*0.12;
+  ring.style.left=(rx-16)+'px'; ring.style.top=(ry-16)+'px';
+  requestAnimationFrame(animRing);
+}
+animRing();
+document.querySelectorAll('a,button').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{cur.style.transform='scale(2.5)';ring.style.transform='scale(1.5)'});
+  el.addEventListener('mouseleave',()=>{cur.style.transform='scale(1)';ring.style.transform='scale(1)'});
+});
+
+/* ─── Ticker ─── */
+const tickers = [
+  {n:'NIFTY50',p:'Live',c:'See Market tab',u:true},
+  {n:'Run scanner',p:'for',c:'real signals',u:true},
+  {n:'takshvitrade.com',p:'NSE',c:'Signal Intelligence',u:true},
+];
+const track=document.getElementById('ticker');
+track.innerHTML=[...tickers,...tickers].map(t=>`
+  <div class="ticker-item">
+    <span class="t-name">${t.n}</span>
+    <span class="t-price">${t.p}</span>
+    <span class="${t.u?'t-up':'t-dn'}">${t.c}</span>
+  </div>`).join('');
+
+/* ─── Scroll effects ─── */
+const nav=document.getElementById('nav');
+window.addEventListener('scroll',()=>{
+  nav.classList.toggle('scrolled',window.scrollY>50);
+});
+const revealObs=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{if(e.isIntersecting)e.target.classList.add('on')});
+},{threshold:0.08});
+document.querySelectorAll('.reveal').forEach(el=>revealObs.observe(el));
+
+/* ═══════════════════════════════════════════════════════════
+   AUTH SYSTEM — JWT + Supabase via backend API
+   ═══════════════════════════════════════════════════════════ */
+
+// ── State ────────────────────────────────────────────────────
+let _authToken = null;
+let _authUser  = null;
+
+// ── Token persistence (memory only — no localStorage) ────────
+function authGetToken()  { return _authToken; }
+function authGetUser()   { return _authUser; }
+function authIsLoggedIn(){ return !!_authToken; }
+
+function authSetSession(token, user){
+  _authToken = token;
+  _authUser  = user;
+  // Also store in sessionStorage so refresh keeps session alive
+  try {
+    sessionStorage.setItem('tt_token', token);
+    sessionStorage.setItem('tt_user',  JSON.stringify(user));
+  } catch(_){}
+  updateAuthUI();
+}
+
+function authClearSession(){
+  _authToken = null;
+  _authUser  = null;
+  try { sessionStorage.removeItem('tt_token'); sessionStorage.removeItem('tt_user'); } catch(_){}
+  updateAuthUI();
+}
+
+// Restore session on page load
+function authRestoreSession(){
+  try {
+    const token = sessionStorage.getItem('tt_token');
+    const user  = JSON.parse(sessionStorage.getItem('tt_user') || 'null');
+    if(token && user){ _authToken = token; _authUser = user; updateAuthUI(); }
+  } catch(_){}
+}
+
+// ── UI updates after login/logout ─────────────────────────────
+function updateAuthUI(){
+  const strip    = document.getElementById('auth-user-strip');
+  const emailEl  = document.getElementById('auth-user-email');
+  const badgeEl  = document.getElementById('auth-plan-badge');
+  const loginBtn = document.getElementById('nav-login-btn');
+
+  if(authIsLoggedIn() && _authUser){
+    // Show user strip in app header
+    if(strip)  { strip.classList.add('show'); }
+    if(emailEl){ emailEl.textContent = _authUser.email || ''; }
+    if(badgeEl){
+      const plan = _authUser.plan || 'free';
+      badgeEl.textContent = plan.toUpperCase();
+      badgeEl.className   = `plan-badge ${plan}`;
+    }
+    // Update nav button
+    if(loginBtn) loginBtn.textContent = 'Dashboard';
+  } else {
+    if(strip)    strip.classList.remove('show');
+    if(loginBtn) loginBtn.textContent = 'Log In';
+  }
+}
+
+// ── Modal open/close ──────────────────────────────────────────
+function openAuthModal(tab = 'login'){
+  switchAuthTab(tab);
+  document.getElementById('auth-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  // Focus first input
+  setTimeout(() => {
+    const inp = tab === 'login'
+      ? document.getElementById('login-email')
+      : document.getElementById('reg-name');
+    if(inp) inp.focus();
+  }, 120);
+}
+
+function closeAuthModal(){
+  document.getElementById('auth-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  // Clear errors
+  ['login-error','reg-error'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = '';
+  });
+}
+
+function switchAuthTab(tab){
+  document.getElementById('auth-login-form').style.display    = tab==='login'    ? 'block' : 'none';
+  document.getElementById('auth-register-form').style.display = tab==='register' ? 'block' : 'none';
+  document.getElementById('tab-login-btn').classList.toggle('active', tab==='login');
+  document.getElementById('tab-reg-btn').classList.toggle('active',   tab==='register');
+}
+
+// ── DOM-dependent auth event listeners — must run AFTER HTML is parsed ──
+document.addEventListener('DOMContentLoaded', () => {
+
+  // Close modal on overlay click
+  const overlay = document.getElementById('auth-overlay');
+  if(overlay){
+    overlay.addEventListener('click', e => {
+      if(e.target === overlay) closeAuthModal();
+    });
+  }
+
+  // Enter key on login password field
+  const loginPwd = document.getElementById('login-password');
+  if(loginPwd){
+    loginPwd.addEventListener('keydown', e => {
+      if(e.key === 'Enter') authLogin();
+    });
+  }
+
+  // Enter key on register phone field
+  const regPhone = document.getElementById('reg-phone');
+  if(regPhone){
+    regPhone.addEventListener('keydown', e => {
+      if(e.key === 'Enter') authRegister();
+    });
+  }
+
+  // Restore session from sessionStorage
+  authRestoreSession();
+});
+
+// ── navLoginClick — nav Log In button ────────────────────────
+function navLoginClick(){
+  if(authIsLoggedIn()){
+    document.getElementById('app').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  } else {
+    openAuthModal('login');
+  }
+}
+
+// ── openApp — now checks auth first ──────────────────────────
+function openApp(){
+  if(authIsLoggedIn()){
+    // Already logged in — open dashboard directly
+    document.getElementById('app').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  } else {
+    // Not logged in — show auth modal
+    openAuthModal('login');
+  }
+}
+
+function closeApp(){
+  document.getElementById('app').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function authLogout(){
+  authClearSession();
+  closeApp();
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────
+async function authLogin(){
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-error');
+  const btn      = document.getElementById('login-btn');
+
+  errEl.textContent = '';
+
+  if(!email || !password){
+    errEl.textContent = 'Please enter email and password.';
+    return;
+  }
+
+  btn.disabled     = true;
+  btn.textContent  = 'Logging in...';
+
+  try {
+    const res  = await fetch(`${API}/api/auth/login`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+
+    if(!res.ok){
+      errEl.textContent = data.detail || 'Login failed. Check your email and password.';
+      return;
+    }
+
+    // Success
+    authSetSession(data.token, data.user);
+    closeAuthModal();
+    // Open dashboard
+    document.getElementById('app').classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+  } catch(err){
+    errEl.textContent = 'Network error — check your connection.';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Log In →';
+  }
+}
+
+// ── REGISTER ─────────────────────────────────────────────────
+async function authRegister(){
+  const name     = document.getElementById('reg-name').value.trim();
+  const email    = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const phone    = document.getElementById('reg-phone').value.trim();
+  const errEl    = document.getElementById('reg-error');
+  const btn      = document.getElementById('reg-btn');
+
+  errEl.textContent = '';
+
+  if(!name){ errEl.textContent = 'Please enter your name.'; return; }
+  if(!email){ errEl.textContent = 'Please enter your email.'; return; }
+  if(!password || password.length < 8){
+    errEl.textContent = 'Password must be at least 8 characters.';
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = 'Creating account...';
+
+  try {
+    const res  = await fetch(`${API}/api/auth/register`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email, password, name, phone }),
+    });
+    const data = await res.json();
+
+    if(!res.ok){
+      errEl.textContent = data.detail || 'Registration failed. Try again.';
+      return;
+    }
+
+    // Success — log in immediately
+    authSetSession(data.token, data.user);
+    closeAuthModal();
+    document.getElementById('app').classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+  } catch(err){
+    errEl.textContent = 'Network error — check your connection.';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Create Free Account →';
+  }
+}
+
+/* ─── App open/close ─── */
+// openApp and closeApp now defined in auth system above
+/* ─── Tabs ─── */
+function showTab(name){
+  console.log("TAB CLICKED:", name);
+
+  ['signals','market','trade','news'].forEach(t=>{
+    const el = document.getElementById('tab-'+t);
+    if(el){
+      el.style.display = t===name ? 'block' : 'none';
+    }
+  });
+
+  document.querySelectorAll('.app-tab').forEach((btn,i)=>{
+    btn.classList.toggle('active',['signals','market','trade','news'][i]===name);
+  });
+
+  // 🔥 THIS IS MISSING — ADD IT
+  if(name === "news"){
+    console.log("NEWS FUNCTION TRIGGERED");
+    loadNews();
+  }
+}
+
+function formatTime(raw){
+  try{
+    const d = new Date(raw);
+    return d.toLocaleString("en-IN", {
+      day:"2-digit",
+      month:"short",
+      hour:"2-digit",
+      minute:"2-digit"
+    });
+  }catch{
+    return raw || "";
+  }
+}
+  let newsLoaded = false;
+
+async function loadNews(){
+  if(newsLoaded) return;
+
+  console.log("NEWS LOADING...");
+
+  const container = document.getElementById("news-container");
+  if(!container) return;
+
+  container.innerHTML = `<div style="color:#888">Loading news...</div>`;
+
+  try{
+    const res = await fetch(`${API}/api/news`);
+    const data = await res.json();
+    const sentiment = data.sentiment || 0;
+
+    document.getElementById("positive-news").textContent =
+    sentiment > 0 ? sentiment : 0;
+
+    document.getElementById("negative-news").textContent =
+    sentiment < 0 ? Math.abs(sentiment) : 0;
+
+    const verdictEl = document.getElementById("news-verdict");
+
+    // FIX 4: Market-aware verdict — news sentiment alone is not enough
+    // News keywords can be BULLISH while Nifty is DOWN — these are independent signals
+    // We now show BOTH and give a combined recommendation
+    const marketTrend = window._marketTrend || 'SIDEWAYS'; // set by loadMarket()
+
+    let newsVerdict, newsColor;
+    if(sentiment > 2){
+      newsVerdict = "BULLISH";
+      newsColor   = "#1ddd8a";
+    } else if(sentiment < -2){
+      newsVerdict = "BEARISH";
+      newsColor   = "#ff4560";
+    } else {
+      newsVerdict = "MIXED";
+      newsColor   = "#f5c018";
+    }
+
+    verdictEl.textContent = newsVerdict;
+    verdictEl.style.color = newsColor;
+    verdictEl.style.background = "transparent";
+    verdictEl.style.border = "none";
+    verdictEl.style.padding = "0";
+    verdictEl.style.display = "block";
+    verdictEl.style.fontFamily = "var(--font-display)";
+    verdictEl.style.fontWeight = "700";
+    verdictEl.style.fontSize   = "1.8rem";
+
+    // Dynamic recommendation based on BOTH market + news
+    const recEl = document.getElementById('news-recommendation');
+    if(recEl){
+      if(marketTrend === "DOWN"){
+        recEl.textContent = "⚠️ Market is BEARISH — no new trades. Scanner is blocked.";
+        recEl.style.color = "#ff4560";
+      } else if(newsVerdict === "BULLISH" && marketTrend === "UP"){
+        recEl.textContent = "✅ News + Market both BULLISH — good trading environment today.";
+        recEl.style.color = "#1ddd8a";
+      } else if(newsVerdict === "BEARISH" && marketTrend === "UP"){
+        recEl.textContent = "⚠️ Market UP but news BEARISH — trade smallest size, tighten stops.";
+        recEl.style.color = "#f5c018";
+      } else {
+        recEl.textContent = "📊 Mixed signals — trade only highest-score setups (80+).";
+        recEl.style.color = "#f5c018";
+      }
+    }
+
+    newsLoaded = true;
+
+    console.log("NEWS DATA:", data);
+
+    container.innerHTML = "";
+
+    if(!data || !data.news || data.news.length === 0){
+      container.innerHTML = `<div style="color:gold">No news available</div>`;
+      return;
+    }
+
+    data.news.forEach(n => {
+      const div = document.createElement("div");
+
+      div.style = `
+  padding:14px 10px;
+  border-bottom:1px solid #1e2836;
+  cursor:pointer;
+  transition:all 0.2s ease;
+`;
+
+div.onmouseover = () => {
+  div.style.background = "rgba(255,255,255,0.03)";
+};
+
+div.onmouseout = () => {
+  div.style.background = "transparent";
+};
+
+div.innerHTML = `
+  <div style="
+    font-size:12px;
+    color:#888;
+    margin-bottom:6px;
+  ">
+    ${formatTime(n.time)} • ${n.source}
+  </div>
+
+  <div style="
+    font-size:15px;
+    color:#e8f0f8;
+    line-height:1.5;
+    font-weight:500;
+  ">
+    ${n.title}
+  </div>
+`;
+      div.onclick = () => window.open(n.link, "_blank");
+
+      container.appendChild(div);
+    });
+
+  }catch(err){
+    newsLoaded = false;
+
+    console.error("❌ News load failed:", err);
+
+    container.innerHTML = `
+      <div style="color:red">Failed to load news</div>
+    `;
+  }
+}
+/* ─── RUN SCANNER (FINAL CLEAN VERSION) ─── */
+  // ── Helper: render one trade row (long/pre-breakout) ─────────
+  function renderLongRow(t, isBearish){
+    const color = t.score >= 83 ? '#00e5c8' : t.score >= 70 ? '#1ddd8a' : '#f5c018';
+    const action = t.action || 'BUY';
+    const badgeBg = action.includes('BEST') ? '#00e5c8' : action === 'BUY STOP' ? '#6c8ebf' : '#1ddd8a';
+    return `
+      <div class="app-row" onclick="showChart('${t.stock}')">
+        <div class="ar-stock">
+          ${t.stock}
+          <br><span style="font-size:0.6rem;color:#3d5068">
+            ${t.near_52w_high ? '★ 52W High · ' : ''}
+            ${isBearish || t.caution ? '½ size · ' : ''}
+            ${t.signal_type === 'PRE_BREAKOUT' ? `${t.distance_to_breakout}% to breakout` : ''}
+          </span>
+        </div>
+        <div class="ar-score" style="color:${color}">${t.score}</div>
+        <div class="ar-val">₹${Number(t.entry).toLocaleString('en-IN')}</div>
+        <div class="ar-val" style="color:#ff4560">₹${Number(t.sl).toLocaleString('en-IN')}</div>
+        <div class="ar-val" style="color:#1ddd8a">₹${Number(t.target).toLocaleString('en-IN')}</div>
+        <div class="ar-val">${t.rr}</div>
+        <div class="ar-val">${t.qty} ${t.qty===1?'share':'shares'}</div>
+        <div class="ar-val">₹${Number(t.position).toLocaleString('en-IN')}</div>
+        <div class="ar-val">
+          <button class="ar-btn" style="background:${badgeBg};color:#000"
+            onclick="event.stopPropagation();showTrade('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty})">
+            ${action === 'BUY STOP' ? '⏳ BUY STOP' : action.includes('BEST') ? '🔥 BEST' : action}
+          </button>
+        </div>
+      </div>`;
+  }
+
+  // ── Helper: render one short row ──────────────────────────────
+  function renderShortRow(t){
+    const color = t.score >= 83 ? '#ff4560' : '#ff7a8a';
+    const action = t.action || 'SHORT';
+    const badgeBg = action.includes('BEST') ? '#ff4560' : action === 'SELL STOP' ? '#8b3a3a' : '#c0392b';
+    return `
+      <div class="app-row" onclick="showChart('${t.stock}')">
+        <div class="ar-stock">
+          ${t.stock}
+          <br><span style="font-size:0.6rem;color:#3d5068">
+            ${t.near_52w_low ? '↓ Near 52W Low · ' : ''}
+            ${t.signal_type === 'PRE_BREAKDOWN' ? `${t.distance_to_breakdown}% to breakdown` : ''}
+            ${t.caution ? '⚠ Counter-trend' : ''}
+          </span>
+        </div>
+        <div class="ar-score" style="color:${color}">${t.score}</div>
+        <div class="ar-val">₹${Number(t.entry).toLocaleString('en-IN')}</div>
+        <div class="ar-val" style="color:#1ddd8a">₹${Number(t.sl).toLocaleString('en-IN')}</div>
+        <div class="ar-val" style="color:#ff4560">₹${Number(t.target).toLocaleString('en-IN')}</div>
+        <div class="ar-val">${t.rr}</div>
+        <div class="ar-val">${t.qty} ${t.qty===1?'share':'shares'}</div>
+        <div class="ar-val">₹${Number(t.position).toLocaleString('en-IN')}</div>
+        <div class="ar-val">
+          <button class="ar-btn" style="background:${badgeBg};color:#fff;border-color:${badgeBg}"
+            onclick="event.stopPropagation();showTrade('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty})">
+            ${action === 'SELL STOP' ? '⏳ SELL STOP' : action.includes('BEST') ? '▼ BEST SHORT' : '▼ SHORT'}
+          </button>
+        </div>
+      </div>`;
+  }
+
+  // ── Helper: render a section ──────────────────────────────────
+  function renderSection(id, icon, title, badge, badgeColor, rows, emptyMsg, exportFn){
+    const el = document.getElementById(id);
+    if(!el) return;
+    const count = rows.length;
+    el.innerHTML = `
+      <div class="section-hdr" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="color:${badgeColor};font-size:0.75rem">${icon}</span>
+          <span style="font-family:var(--font-mono);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#5a7a96">${title}</span>
+          <span style="font-family:var(--font-mono);font-size:0.65rem;padding:2px 8px;border-radius:3px;background:${badgeColor}20;color:${badgeColor};border:1px solid ${badgeColor}40">
+            ${count} ${count===1?'STOCK':'STOCKS'}
+          </span>
+        </div>
+        ${count > 0 ? `<button onclick="${exportFn}" style="font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;padding:4px 10px;background:transparent;border:1px solid #1e2836;color:#3d5068;cursor:pointer;border-radius:3px">↓ EXPORT CSV</button>` : ''}
+      </div>
+      <div class="app-table">
+        <div class="app-table-head">
+          <span>STOCK</span><span>SCORE</span><span>ENTRY ₹</span><span>SL ₹</span><span>TARGET ₹</span><span>RR</span><span>QTY</span><span>POSITION ₹</span><span>ACTION</span>
+        </div>
+        ${count === 0
+          ? `<div style="text-align:center;padding:1.5rem;color:#3d5068;font-family:var(--font-mono);font-size:0.72rem">${emptyMsg}</div>`
+          : rows.join('')
+        }
+      </div>`;
+  }
+
+  // ── Helper: render relative strength section ──────────────────
+  function renderRS(stocks){
+    const el = document.getElementById('section-rs');
+    if(!el) return;
+    const count = stocks.length;
+    el.innerHTML = `
+      <div class="section-hdr" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="color:#00e5c8;font-size:0.75rem">⚡</span>
+          <span style="font-family:var(--font-mono);font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:#5a7a96">RELATIVE STRENGTH — BEATING NIFTY TODAY</span>
+          <span style="font-family:var(--font-mono);font-size:0.65rem;padding:2px 8px;border-radius:3px;background:#00e5c820;color:#00e5c8;border:1px solid #00e5c840">WATCHLIST</span>
+        </div>
+      </div>
+      <div class="app-table">
+        <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1.2fr 0.8fr;padding:7px 12px;background:#080b0e;border-bottom:1px solid #181f28;min-width:700px">
+          ${['STOCK','TODAY %','NIFTY %','OUTPERFORMANCE','STRENGTH BAR','SIGNAL'].map(h=>`<span style="font-family:var(--font-mono);font-size:0.62rem;letter-spacing:0.1em;text-transform:uppercase;color:#3d5068;text-align:center">${h}</span>`).join('')}
+        </div>
+        ${count === 0
+          ? `<div style="text-align:center;padding:1.5rem;color:#3d5068;font-family:var(--font-mono);font-size:0.72rem">No stocks outperforming Nifty today</div>`
+          : stocks.map(s => {
+              const barW = Math.min(100, s.outperformance * 20);
+              const tc   = s.today_pct >= 0 ? '#1ddd8a' : '#ff4560';
+              return `
+                <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr 1.2fr 0.8fr;padding:9px 12px;border-bottom:1px solid #0f1520;align-items:center;cursor:pointer;min-width:700px" onclick="showChart('${s.stock}')">
+                  <span style="font-family:var(--font-display);font-size:0.85rem;font-weight:600;color:#e8f0f8">${s.stock}</span>
+                  <span style="font-family:var(--font-mono);font-size:0.8rem;color:${tc};text-align:center">${s.today_pct >= 0 ? '+' : ''}${s.today_pct}%</span>
+                  <span style="font-family:var(--font-mono);font-size:0.8rem;color:#ff4560;text-align:center">${s.nifty_pct}%</span>
+                  <span style="font-family:var(--font-mono);font-size:0.8rem;color:#00e5c8;text-align:center">+${s.outperformance}%</span>
+                  <div style="text-align:center">
+                    <div style="background:#0a0d10;border-radius:3px;height:5px;width:100px;display:inline-block">
+                      <div style="background:#1ddd8a;height:5px;border-radius:3px;width:${barW}%"></div>
+                    </div>
+                  </div>
+                  <span onclick="showChart('${s.stock}')" style="font-family:var(--font-mono);font-size:0.65rem;padding:3px 8px;border-radius:3px;background:#00e5c810;color:#00e5c8;border:1px solid #00e5c830;text-align:center;cursor:pointer">WATCH</span>
+                </div>`;
+            }).join('')
+        }
+      </div>`;
+  }
+
+  // ── MAIN SCAN FUNCTION ────────────────────────────────────────
+  async function runScan(){
+  const btn    = document.getElementById('scan-btn');
+  const loader = document.getElementById('scan-loader');
+  const label  = document.getElementById('scan-label');
+  const capEl  = document.getElementById('capital-input');
+  const capital = capEl ? Math.floor(Number(capEl.value)) || 0 : 0;
+  document.getElementById('capital-display').textContent = `₹${capital.toLocaleString('en-IN')}`;
+  if(capital < 10000){ alert('Enter minimum ₹10,000 capital'); return; }
+
+  btn.disabled = true;
+  loader.classList.add('show');
+
+  const progressMessages = [
+    'Checking market trend...','Fetching 50 stocks (parallel)...',
+    'Scanning long setups...','Scanning short setups...',
+    'Finding pre-breakout stocks...','Finding pre-breakdown stocks...',
+    'Calculating relative strength...','Ranking all signals...','Almost done...',
+  ];
+  let elapsed = 0;
+  const timerInterval = setInterval(() => {
+    elapsed++;
+    const msg = progressMessages[Math.min(Math.floor(elapsed/2), progressMessages.length-1)];
+    label.textContent = `⏱ ${elapsed}s — ${msg}`;
+  }, 1000);
+
+  const scanStart = Date.now();
+
+  try {
+    const res = await fetch(`${API}/run-master-scan?capital=${capital}`);
+    if(!res.ok) throw new Error("API failed");
+    const data = await res.json();
+
+    // Update market cards — Google Finance format
+    if(data.nifty != null){
+      const priceFormatted = Number(data.nifty).toLocaleString('en-IN', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+      }) + ' INR';
+
+      // Point change from scan data
+      const niftyPriceEl = document.getElementById('nifty-price');
+      if(niftyPriceEl) niftyPriceEl.textContent = priceFormatted;
+
+      const dashNiftyEl = document.getElementById('dashboard-nifty-price');
+      if(dashNiftyEl) dashNiftyEl.textContent = Number(data.nifty).toLocaleString('en-IN', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+      });
+
+      const appNiftyEl = document.getElementById('app-nifty-price');
+      if(appNiftyEl) appNiftyEl.textContent = priceFormatted;
+    }
+    if(data.market_trend){
+      const trend = data.market_trend;
+      const color = trend==='UP' ? '#1ddd8a' : '#ff4560';
+      ['market-status','app-market-trend'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el){ el.textContent = trend; el.style.color = color; }
+      });
+      const dot = document.getElementById('nifty-dot');
+      if(dot){ dot.classList.remove('dot-red','dot-green'); dot.classList.add(trend==='UP'?'dot-green':'dot-red'); }
+      const sub = document.getElementById('market-sub');
+      if(sub) sub.textContent = trend==='UP' ? 'Bullish market' : 'Bearish market';
+
+      // Update nifty-change with Google Finance style point change
+      if(data.change_pct != null && data.nifty != null){
+        const arrow = trend === 'UP' ? '▲' : '▼';
+        const chgEl = document.getElementById('nifty-change');
+        if(chgEl){
+          chgEl.textContent = `${arrow} ${Math.abs(data.change_pct).toFixed(2)}% today`;
+          chgEl.style.color = color;
+        }
+        // Update verdict on hero badge too
+        const verdictEl = document.getElementById('nifty-verdict');
+        if(verdictEl){
+          verdictEl.textContent = `${arrow} ${Math.abs(data.change_pct).toFixed(2)}% today`;
+          verdictEl.style.color = color;
+        }
+      }
+    }
+
+    // Total signals count
+    const totalSig = (data.long_signals||[]).length + (data.short_signals||[]).length;
+    const sigCount = document.getElementById('sig-count');
+    if(sigCount) sigCount.textContent = totalSig;
+    const sigLabel = document.getElementById('sig-label');
+    if(sigLabel) sigLabel.textContent = totalSig===1 ? 'Signal passed all filters' : 'Signals passed all filters';
+
+    // Total deployed
+    const allTrades = [...(data.long_signals||[]), ...(data.short_signals||[]),
+                       ...(data.pre_breakout||[]), ...(data.pre_breakdown||[])];
+    const deployed = allTrades.reduce((s,t) => s + (t.position||0), 0);
+    const depEl = document.getElementById('capital-deployed');
+    if(depEl) depEl.textContent = `₹${deployed.toLocaleString('en-IN')}`;
+
+    // Market banner
+    const container = document.getElementById('signals-body');
+    const isBearish = data.market_trend === 'DOWN';
+    const isCrash   = data.is_crash;
+    let bannerHtml  = '';
+    if(isCrash){
+      bannerHtml = `<div style="background:rgba(255,69,96,0.1);border:1px solid rgba(255,69,96,0.4);color:#ff4560;font-family:var(--font-mono);font-size:0.72rem;padding:0.85rem 1.2rem;margin-bottom:1rem;border-radius:6px">
+        🚨 EXTREME CRASH — Nifty ${data.change_pct}% today. No long trades. Short signals may be high probability.
+      </div>`;
+    } else if(isBearish){
+      bannerHtml = `<div style="background:rgba(245,192,24,0.06);border:1px solid rgba(245,192,24,0.25);color:#f5c018;font-family:var(--font-mono);font-size:0.72rem;padding:0.85rem 1.2rem;margin-bottom:1rem;border-radius:6px">
+        ⚠ BEARISH MARKET (Nifty ${data.change_pct}%) — Long positions reduced to 50% size. Short signals are primary opportunity today.
+      </div>`;
+    }
+
+    // Render all 5 sections
+    container.innerHTML = bannerHtml +
+      `<div id="section-long" style="margin-bottom:1.25rem"></div>
+       <div id="section-pre-bo" style="margin-bottom:1.25rem"></div>
+       <div id="section-short" style="margin-bottom:1.25rem"></div>
+       <div id="section-pre-bd" style="margin-bottom:1.25rem"></div>
+       <div id="section-rs" style="margin-bottom:1.25rem"></div>`;
+
+    // Long signals
+    renderSection('section-long', '▲', 'LONG SIGNALS', '#1ddd8a', '#1ddd8a',
+      (data.long_signals||[]).map(t => renderLongRow(t, isBearish)),
+      isCrash ? 'Crash mode — no long trades today' : 'No long signals today',
+      'exportCSV()');
+
+    // Pre-breakout
+    renderSection('section-pre-bo', '⏳', 'PRE-BREAKOUT — SET BUY STOP TONIGHT', '#6c8ebf', '#6c8ebf',
+      (data.pre_breakout||[]).map(t => renderLongRow(t, isBearish)),
+      'No stocks near breakout today',
+      'exportCSV()');
+
+    // Short signals
+    renderSection('section-short', '▼', 'SHORT SIGNALS', '#ff4560', '#ff4560',
+      (data.short_signals||[]).map(t => renderShortRow(t)),
+      'No short signals today',
+      'exportCSV()');
+
+    // Pre-breakdown
+    renderSection('section-pre-bd', '⏳', 'PRE-BREAKDOWN — SET SELL STOP TONIGHT', '#c0392b', '#c0392b',
+      (data.pre_breakdown||[]).map(t => renderShortRow(t)),
+      'No stocks near breakdown today',
+      'exportCSV()');
+
+    // Relative strength
+    renderRS(data.relative_strength || []);
+
+    window._masterScanData = data;  // store for CSV export
+
+  } catch(err){
+    console.error('Scan error:', err);
+    // Only show "waking up" for actual network/fetch errors
+    // Not for JS rendering bugs
+    const isNetworkError = err.name==='TypeError' && err.message?.includes('fetch');
+    const isTimeoutError = err.message?.includes('timeout') || err.message?.includes('abort');
+    document.getElementById('signals-body').innerHTML = `
+      <div style="text-align:center;padding:2rem;font-family:var(--font-mono);font-size:0.8rem">
+        ${isNetworkError || isTimeoutError
+          ? `<span style="color:#f5c018">⏳ Server waking up — wait 30s and try again</span>`
+          : `<span style="color:#ff4560">❌ Render error: ${err.message} — check console (F12)</span>`
+        }
+      </div>`;
+  } finally{
+    clearInterval(timerInterval);
+    const totalTime = ((Date.now() - scanStart) / 1000).toFixed(1);
+    loader.classList.remove('show');
+    label.textContent = `▶ Run Scanner  (last: ${totalTime}s)`;
+    btn.disabled = false;
+  }
+}
+
+/* ─── GENERIC TRADE FUNCTION (BROKER NEUTRAL) ─── */
+function showTrade(stock, entry, sl, target, qty){
+  const risk        = Math.abs((entry - sl) * qty).toFixed(0);
+  const reward      = Math.abs((target - entry) * qty).toFixed(0);
+  const upside      = (((target - entry) / entry) * 100).toFixed(1);
+  const isShort     = target < entry;
+  const actionColor = isShort ? '#ff4560' : '#00e5c8';
+  const actionLabel = isShort ? 'SHORT' : 'LONG';
+
+  // Broker deep links — NSE stock symbol
+  const brokers = [
+    {
+      name: 'Zerodha Kite',
+      icon: '🟠',
+      color: '#387ed1',
+      url: `https://kite.zerodha.com/chart/ext/ciq/NSE/${stock}/1D`,
+      desc: 'Most popular · lowest brokerage'
+    },
+    {
+      name: 'Groww',
+      icon: '🟢',
+      color: '#5367ff',
+      url: `https://groww.in/stocks/${stock.toLowerCase()}`,
+      desc: 'Best for beginners'
+    },
+    {
+      name: 'Angel One',
+      icon: '🔵',
+      color: '#e8841a',
+      url: `https://www.angelone.in/trade/stocks/${stock.toLowerCase()}-share-price`,
+      desc: 'Free delivery trades'
+    },
+    {
+      name: 'Upstox',
+      icon: '🟣',
+      color: '#7b61ff',
+      url: `https://upstox.com/stocks/${stock.toLowerCase()}/`,
+      desc: 'Fast execution'
+    },
+  ];
+
+  // Remove existing modal if present
+  const existing = document.getElementById('trade-plan-modal');
+  if(existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'trade-plan-modal';
+  modal.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;
+    display:flex;align-items:center;justify-content:center;padding:1rem;
+  `;
+
+  modal.innerHTML = `
+    <div style="
+      background:#0d1117;border:1px solid #1e2836;border-radius:12px;
+      width:100%;max-width:480px;max-height:90vh;overflow-y:auto;
+    ">
+      <!-- Header -->
+      <div style="
+        padding:1.25rem 1.5rem;border-bottom:1px solid #181f28;
+        display:flex;justify-content:space-between;align-items:center;
+      ">
+        <div>
+          <div style="font-family:var(--font-display);font-size:1.4rem;font-weight:800;color:#e8f0f8">
+            ${stock}
+          </div>
+          <div style="font-family:var(--font-mono);font-size:0.65rem;letter-spacing:0.12em;
+                      text-transform:uppercase;color:${actionColor};margin-top:3px">
+            ${actionLabel} · Trade Plan
+          </div>
+        </div>
+        <button onclick="document.getElementById('trade-plan-modal').remove()"
+          style="background:#181f28;border:1px solid #1e2836;color:#5a7a96;
+                 padding:6px 12px;border-radius:6px;cursor:pointer;font-size:0.9rem">
+          ✕
+        </button>
+      </div>
+
+      <!-- Trade levels -->
+      <div style="padding:1.25rem 1.5rem;border-bottom:1px solid #181f28">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.6rem;margin-bottom:1rem">
+          <div style="background:#080b0e;border:1px solid #181f28;border-radius:7px;padding:0.75rem">
+            <div style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Entry</div>
+            <div style="font-family:var(--font-mono);font-size:1rem;font-weight:600;color:#e8f0f8">₹${Number(entry).toLocaleString('en-IN')}</div>
+          </div>
+          <div style="background:#080b0e;border:1px solid rgba(255,69,96,0.3);border-radius:7px;padding:0.75rem">
+            <div style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Stop Loss</div>
+            <div style="font-family:var(--font-mono);font-size:1rem;font-weight:600;color:#ff4560">₹${Number(sl).toLocaleString('en-IN')}</div>
+          </div>
+          <div style="background:#080b0e;border:1px solid rgba(29,221,138,0.3);border-radius:7px;padding:0.75rem">
+            <div style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Target</div>
+            <div style="font-family:var(--font-mono);font-size:1rem;font-weight:600;color:#1ddd8a">₹${Number(target).toLocaleString('en-IN')}</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:0.5rem">
+          <div style="background:#080b0e;border-radius:6px;padding:0.6rem;text-align:center">
+            <div style="font-family:var(--font-mono);font-size:0.55rem;color:#3d5068;text-transform:uppercase;margin-bottom:3px">Qty</div>
+            <div style="font-family:var(--font-mono);font-size:0.85rem;color:#e8f0f8;font-weight:500">${qty}</div>
+          </div>
+          <div style="background:#080b0e;border-radius:6px;padding:0.6rem;text-align:center">
+            <div style="font-family:var(--font-mono);font-size:0.55rem;color:#3d5068;text-transform:uppercase;margin-bottom:3px">Risk</div>
+            <div style="font-family:var(--font-mono);font-size:0.85rem;color:#ff4560;font-weight:500">₹${risk}</div>
+          </div>
+          <div style="background:#080b0e;border-radius:6px;padding:0.6rem;text-align:center">
+            <div style="font-family:var(--font-mono);font-size:0.55rem;color:#3d5068;text-transform:uppercase;margin-bottom:3px">Reward</div>
+            <div style="font-family:var(--font-mono);font-size:0.85rem;color:#1ddd8a;font-weight:500">₹${reward}</div>
+          </div>
+          <div style="background:#080b0e;border-radius:6px;padding:0.6rem;text-align:center">
+            <div style="font-family:var(--font-mono);font-size:0.55rem;color:#3d5068;text-transform:uppercase;margin-bottom:3px">Upside</div>
+            <div style="font-family:var(--font-mono);font-size:0.85rem;color:#00e5c8;font-weight:500">${upside}%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Rules -->
+      <div style="padding:1rem 1.5rem;border-bottom:1px solid #181f28">
+        <div style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:0.6rem">Trading Rules</div>
+        <div style="font-family:var(--font-mono);font-size:0.72rem;color:#5a7a96;line-height:1.9">
+          ${isShort ? `
+            ▸ Enter SHORT below ₹${Number(entry).toLocaleString('en-IN')}<br>
+            ▸ Set SL at ₹${Number(sl).toLocaleString('en-IN')} immediately after entry<br>
+            ▸ Target ₹${Number(target).toLocaleString('en-IN')} — exit fully or trail<br>
+            ▸ Only for F&O / intraday in cash segment
+          ` : `
+            ▸ Enter ONLY if stock trades above ₹${Number(entry).toLocaleString('en-IN')}<br>
+            ▸ Set SL at ₹${Number(sl).toLocaleString('en-IN')} immediately after entry<br>
+            ▸ Target ₹${Number(target).toLocaleString('en-IN')} — exit fully<br>
+            ▸ Avoid if gap-up is more than 2% above entry
+          `}
+        </div>
+      </div>
+
+      <!-- Broker links -->
+      <div style="padding:1rem 1.5rem">
+        <div style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:0.75rem">Open in your broker</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+          ${brokers.map(b => `
+            <a href="${b.url}" target="_blank" rel="noopener"
+              style="display:flex;align-items:center;gap:0.6rem;padding:0.7rem 0.9rem;
+                     background:#080b0e;border:1px solid #181f28;border-radius:8px;
+                     text-decoration:none;transition:all 0.15s;cursor:pointer"
+              onmouseover="this.style.borderColor='${actionColor}';this.style.background='#0d1117'"
+              onmouseout="this.style.borderColor='#181f28';this.style.background='#080b0e'">
+              <span style="font-size:1.1rem">${b.icon}</span>
+              <div>
+                <div style="font-family:var(--font-mono);font-size:0.72rem;font-weight:600;color:#e8f0f8">${b.name}</div>
+                <div style="font-family:var(--font-mono);font-size:0.58rem;color:#3d5068;margin-top:1px">${b.desc}</div>
+              </div>
+              <span style="margin-left:auto;font-size:0.65rem;color:#3d5068">→</span>
+            </a>
+          `).join('')}
+        </div>
+      </div>
+
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  // Close on backdrop click
+  modal.addEventListener('click', (e) => {
+    if(e.target === modal) modal.remove();
+  });
+}
+/* ─── MARKET LIVE DATA ─── */
+function round2(n){ return Math.round(n * 100) / 100; }
+
+async function loadMarket(){
+  try{
+    const res = await fetch(`${API}/api/market/nifty`);
+    const data = await res.json();
+
+    const trend = data.trend || 'SIDEWAYS';
+    const color = trend === "UP" ? "#1ddd8a" : trend === "DOWN" ? "#ff4560" : "#f5c018";
+
+    // ── Format exactly like Google Finance ───────────────────
+    // Example: 24,181.30 INR ▼ -145.35 (-0.60%) today
+    let priceText  = '--';
+    let changeText = '';
+
+    if(data.price != null){
+      priceText = Number(data.price).toLocaleString('en-IN', {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+      }) + ' INR';
+
+      if(data.prev != null && data.change != null){
+        const pointChange = round2(data.price - data.prev);
+        const arrow = trend === "UP" ? "▲" : trend === "DOWN" ? "▼" : "—";
+        const sign  = pointChange >= 0 ? "+" : "";
+        changeText  = `${arrow} ${sign}${pointChange.toFixed(2)} (${Math.abs(data.change).toFixed(2)}%) today`;
+      }
+    }
+
+    // ── HERO badge ─────────────────────────────────────────
+    const priceEl = document.getElementById('nifty-price');
+    if(priceEl) priceEl.textContent = priceText;
+
+    const verdictEl = document.getElementById('nifty-verdict');
+    if(verdictEl){ verdictEl.textContent = changeText; verdictEl.style.color = color; }
+
+    // ── DASHBOARD mini card ─────────────────────────────────
+    const dashNifty = document.getElementById('dashboard-nifty-price');
+    if(dashNifty) dashNifty.textContent = data.price
+      ? Number(data.price).toLocaleString('en-IN', {minimumFractionDigits:2, maximumFractionDigits:2})
+      : '--';
+
+    const niftyChg = document.getElementById('nifty-change');
+    if(niftyChg){ niftyChg.textContent = changeText; niftyChg.style.color = color; }
+
+    // ── Market status ───────────────────────────────────────
+    const marketStatus = document.getElementById('market-status');
+    if(marketStatus) marketStatus.textContent = trend;
+
+    const marketSub = document.getElementById('market-sub');
+    if(marketSub) marketSub.textContent =
+      trend === "UP" ? "Bullish market" : trend === "DOWN" ? "Bearish market" : "Sideways";
+
+    const dot = document.getElementById('nifty-dot');
+    if(dot){
+      dot.classList.remove('dot-red','dot-green');
+      dot.classList.add(trend === "UP" ? 'dot-green' : 'dot-red');
+    }
+
+    const appNiftyPrice = document.getElementById('app-nifty-price');
+    if(appNiftyPrice) appNiftyPrice.textContent = data.price
+      ? `${Number(data.price).toLocaleString('en-IN')} INR` : '--';
+
+    const appTrend = document.getElementById('app-market-trend');
+    if(appTrend){ appTrend.textContent = trend; appTrend.style.color = color; }
+
+    const trendEl = document.getElementById('market-trend');
+    if(trendEl){ trendEl.textContent = trend; trendEl.style.color = color; }
+
+    const mNote = document.getElementById('market-note');
+    if(mNote) mNote.textContent =
+      trend === "UP" ? "Bullish momentum" : trend === "DOWN" ? "Bearish pressure" : "Sideways momentum";
+
+    window._marketTrend = trend;
+
+  }catch(err){
+    const priceEl = document.getElementById('nifty-price');
+    if(priceEl) priceEl.textContent = '--';
+    const verdictEl = document.getElementById('nifty-verdict');
+    if(verdictEl) verdictEl.textContent = 'MARKET — data unavailable';
+    window._marketTrend = 'SIDEWAYS';
+    console.warn("Market fetch failed:", err);
+  }
+}
+
+/* CALL MARKET */
+ loadMarket();
+ setInterval(loadMarket, 300000);
+ showTab('signals');
+ document.getElementById('capital-input').addEventListener('input', (e)=>{
+  const val = Math.floor(Number(e.target.value)) || 0;
+  document.getElementById('capital-display').textContent =
+    val ? `₹${val.toLocaleString('en-IN')}` : '—';
+});
+// SHOW CHART FUNCTION
+// TradingView blocks iframe embedding on non-partner domains
+// Using Screener.in which allows embedding for NSE stocks
+function showChart(stock){
+  const container = document.getElementById('chart-container');
+  const modal     = document.getElementById('chart-modal');
+  if(!container || !modal) return;
+
+  const title = document.getElementById('chart-modal-title');
+  if(title) title.textContent = `${stock} — Daily Chart`;
+
+  modal.style.display = 'flex';
+
+  // Option 1: Open TradingView in a new tab (most reliable)
+  // Option 2: Show chart links with buttons
+  container.innerHTML = `
+    <div style="
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      height:100%;gap:1.5rem;padding:2rem;
+    ">
+      <div style="font-family:var(--font-display);font-size:2rem;font-weight:800;color:#e8f0f8;letter-spacing:0.05em">
+        ${stock}
+      </div>
+      <div style="font-family:var(--font-mono);font-size:0.75rem;color:#5a7a96;letter-spacing:0.1em;text-transform:uppercase">
+        NSE — Daily Chart — Open in your preferred platform
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;width:100%;max-width:520px">
+
+        <a href="https://www.tradingview.com/chart/?symbol=NSE:${stock}" target="_blank"
+          style="display:flex;align-items:center;gap:0.75rem;padding:1rem 1.25rem;
+                 background:#0d1117;border:1px solid #1e2836;border-radius:8px;
+                 text-decoration:none;color:#e8f0f8;font-family:var(--font-mono);
+                 font-size:0.75rem;letter-spacing:0.06em;transition:border-color 0.2s"
+          onmouseover="this.style.borderColor='#00e5c8'"
+          onmouseout="this.style.borderColor='#1e2836'">
+          <span style="font-size:1.2rem">📈</span>
+          <div>
+            <div style="font-weight:600;margin-bottom:2px">TradingView</div>
+            <div style="color:#5a7a96;font-size:0.65rem">Full chart · indicators</div>
+          </div>
+        </a>
+
+        <a href="https://www.screener.in/company/${stock}/consolidated/" target="_blank"
+          style="display:flex;align-items:center;gap:0.75rem;padding:1rem 1.25rem;
+                 background:#0d1117;border:1px solid #1e2836;border-radius:8px;
+                 text-decoration:none;color:#e8f0f8;font-family:var(--font-mono);
+                 font-size:0.75rem;letter-spacing:0.06em;transition:border-color 0.2s"
+          onmouseover="this.style.borderColor='#00e5c8'"
+          onmouseout="this.style.borderColor='#1e2836'">
+          <span style="font-size:1.2rem">📊</span>
+          <div>
+            <div style="font-weight:600;margin-bottom:2px">Screener.in</div>
+            <div style="color:#5a7a96;font-size:0.65rem">Fundamentals · financials</div>
+          </div>
+        </a>
+
+        <a href="https://finance.yahoo.com/quote/${stock}.NS" target="_blank"
+          style="display:flex;align-items:center;gap:0.75rem;padding:1rem 1.25rem;
+                 background:#0d1117;border:1px solid #1e2836;border-radius:8px;
+                 text-decoration:none;color:#e8f0f8;font-family:var(--font-mono);
+                 font-size:0.75rem;letter-spacing:0.06em;transition:border-color 0.2s"
+          onmouseover="this.style.borderColor='#00e5c8'"
+          onmouseout="this.style.borderColor='#1e2836'">
+          <span style="font-size:1.2rem">💹</span>
+          <div>
+            <div style="font-weight:600;margin-bottom:2px">Yahoo Finance</div>
+            <div style="color:#5a7a96;font-size:0.65rem">Price data · news</div>
+          </div>
+        </a>
+
+        <a href="https://www.moneycontrol.com/india/stockpricequote/${stock.toLowerCase()}/" target="_blank"
+          style="display:flex;align-items:center;gap:0.75rem;padding:1rem 1.25rem;
+                 background:#0d1117;border:1px solid #1e2836;border-radius:8px;
+                 text-decoration:none;color:#e8f0f8;font-family:var(--font-mono);
+                 font-size:0.75rem;letter-spacing:0.06em;transition:border-color 0.2s"
+          onmouseover="this.style.borderColor='#00e5c8'"
+          onmouseout="this.style.borderColor='#1e2836'">
+          <span style="font-size:1.2rem">📰</span>
+          <div>
+            <div style="font-weight:600;margin-bottom:2px">Moneycontrol</div>
+            <div style="color:#5a7a96;font-size:0.65rem">News · analyst ratings</div>
+          </div>
+        </a>
+
+      </div>
+
+      <div style="font-family:var(--font-mono);font-size:0.65rem;color:#3d5068;text-align:center;margin-top:0.5rem">
+        Click any link above to open the chart in a new tab
+      </div>
+    </div>
+  `;
+}
+
+// ─── CLOSE CHART ───
+function closeChart(){
+  const modal = document.getElementById('chart-modal');
+  if(modal){
+    modal.style.display = 'none';
+  }
+}
+
+// ─── HOVER MINI CHART ───
+let hoverTimer = null;
+let currentStock = null;
+
+function hoverStart(e, stock){
+  hoverTimer = setTimeout(() => {
+    showHoverChart(e, stock);
+  }, 250);
+}
+
+function showHoverChart(e, stock){
+  const container = document.getElementById('hover-chart');
+  if(!container) return;
+
+  currentStock = stock;
+  container.style.display = 'block';
+
+  // Show clean stock info card instead of broken TradingView iframe
+  // TradingView blocks iframe on non-partner domains
+  container.innerHTML = `
+    <div style="padding:1rem;height:100%;display:flex;flex-direction:column;justify-content:space-between">
+      <div style="font-family:var(--font-display);font-size:1.1rem;font-weight:700;color:#e8f0f8">
+        ${stock}
+        <span style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;margin-left:6px">NSE</span>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:0.65rem;color:#5a7a96;margin-top:4px">
+        Click to open chart links
+      </div>
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
+        <a href="https://www.tradingview.com/chart/?symbol=NSE:${stock}" target="_blank"
+          style="font-family:var(--font-mono);font-size:0.65rem;color:#00e5c8;text-decoration:none;
+                 padding:5px 8px;background:#0a0d10;border:1px solid #1e2836;border-radius:4px;
+                 display:block;text-align:center">
+          📈 Open TradingView Chart →
+        </a>
+        <a href="https://www.screener.in/company/${stock}/" target="_blank"
+          style="font-family:var(--font-mono);font-size:0.65rem;color:#5a7a96;text-decoration:none;
+                 padding:5px 8px;background:#0a0d10;border:1px solid #1e2836;border-radius:4px;
+                 display:block;text-align:center">
+          📊 Screener.in →
+        </a>
+      </div>
+    </div>`;
+
+  hoverMove(e);
+}
+
+function hoverMove(e){
+  const container = document.getElementById('hover-chart');
+  if(!container) return;
+
+  let x = e.clientX + 20;
+  let y = e.clientY + 20;
+
+  if(x + 350 > window.innerWidth){
+    x = e.clientX - 370;
+  }
+
+  if(y + 250 > window.innerHeight){
+    y = e.clientY - 270;
+  }
+
+  container.style.left = x + 'px';
+  container.style.top  = y + 'px';
+}
+
+function hoverEnd(){
+  clearTimeout(hoverTimer);
+  const container = document.getElementById('hover-chart');
+  if(container){
+    container.style.display = 'none';
+  }
+}
+
+function downloadCSV(){
+  const capital = document.getElementById("capital-input").value;
+  if(!capital || capital < 10000){
+    alert("Enter minimum ₹10,000 capital first");
+    return;
+  }
+  // FIX: Was hardcoded to 127.0.0.1:8000 — now uses API variable (works on Render/cloud too)
+  window.open(`${API}/download-csv?capital=${capital}`);
+}
+</script>
+<!-- ─── FULL CHART MODAL ─── -->
+<div id="chart-modal" style="
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.95);
+  z-index:9999;
+">
+  <button onclick="closeChart()" style="
+    position:fixed;
+    top:20px;
+    right:20px;
+    z-index:10000;
+    background:#ff4560;
+    color:#fff;
+    border:none;
+    padding:10px 16px;
+    cursor:pointer;
+    font-size:14px;
+    border-radius:6px;
+    box-shadow:0 0 10px rgba(0,0,0,0.5);
+  ">
+    ✕ Close
+  </button>
+
+  <!-- ✅ CHART CONTAINER -->
+  <div id="chart-container" style="
+    width:100%;
+    height:100%;
+  "></div>
+
+</div>
+<!-- ─── HOVER MINI CHART ─── -->
+<div id="hover-chart" style="
+  display:none;
+  position:fixed;
+  width:350px;
+  height:250px;
+  background:#0d1117;
+  border:1px solid #1e2836;
+  z-index:9999;
+  pointer-events:none;
+  border-radius:6px;
+  overflow:hidden;
+"></div>
+<!-- ═══════════ AUTH MODAL ═══════════ -->
+<div id="auth-overlay">
+  <div class="auth-box">
+    <button class="auth-close" onclick="closeAuthModal()">✕</button>
+    <div class="auth-logo">TAKSHVI<em>.</em>TRADE</div>
+    <div class="auth-tagline">NSE Signal Intelligence</div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login-btn"  onclick="switchAuthTab('login')">Log In</button>
+      <button class="auth-tab"        id="tab-reg-btn"    onclick="switchAuthTab('register')">Register</button>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div id="auth-login-form">
+      <div class="auth-field">
+        <label class="auth-label">Email</label>
+        <input class="auth-input" id="login-email" type="email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Password</label>
+        <input class="auth-input" id="login-password" type="password" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+      <button class="auth-btn" id="login-btn" onclick="authLogin()">Log In →</button>
+      <div class="auth-error" id="login-error"></div>
+      <div class="auth-switch">No account? <span onclick="switchAuthTab('register')">Register free</span></div>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="auth-register-form" style="display:none">
+      <div class="auth-field">
+        <label class="auth-label">Full Name</label>
+        <input class="auth-input" id="reg-name" type="text" placeholder="Vivek Rawat"/>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Email</label>
+        <input class="auth-input" id="reg-email" type="email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Password <span style="color:#3d5068;font-size:0.6rem">(min 8 characters)</span></label>
+        <input class="auth-input" id="reg-password" type="password" placeholder="••••••••" autocomplete="new-password"/>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">WhatsApp Number <span style="color:#3d5068;font-size:0.6rem">(optional)</span></label>
+        <input class="auth-input" id="reg-phone" type="tel" placeholder="9876543210"/>
+      </div>
+      <button class="auth-btn" id="reg-btn" onclick="authRegister()">Create Free Account →</button>
+      <div class="auth-error" id="reg-error"></div>
+      <div class="auth-switch">Already have an account? <span onclick="switchAuthTab('login')">Log in</span></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
