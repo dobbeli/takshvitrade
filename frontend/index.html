@@ -242,6 +242,41 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 .app-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
 .app-close{font-family:var(--font-mono);font-size:0.68rem;color:var(--muted);background:transparent;border:1px solid var(--border);padding:0.4rem 0.8rem;cursor:pointer;letter-spacing:0.1em;text-transform:uppercase;transition:all 0.2s}
 .app-close:hover{border-color:var(--red);color:var(--red)}
+
+/* ── AUTH MODAL ─────────────────────────────────────────────── */
+#auth-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+#auth-overlay.open{display:flex}
+.auth-box{background:#0d1117;border:1px solid #1e2836;width:100%;max-width:420px;padding:2.5rem;position:relative;animation:authSlide 0.2s ease}
+@keyframes authSlide{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
+.auth-logo{font-family:var(--font-display);font-weight:800;font-size:1.2rem;color:var(--white);margin-bottom:0.4rem}
+.auth-logo em{font-style:normal;color:var(--cyan)}
+.auth-tagline{font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);letter-spacing:0.12em;text-transform:uppercase;margin-bottom:2rem}
+.auth-tabs{display:flex;gap:0;margin-bottom:1.8rem;border-bottom:1px solid #1e2836}
+.auth-tab{font-family:var(--font-mono);font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.6rem 1.2rem;background:transparent;border:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all 0.2s}
+.auth-tab.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+.auth-field{margin-bottom:1.1rem}
+.auth-label{font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase;display:block;margin-bottom:0.4rem}
+.auth-input{width:100%;background:#080b0e;border:1px solid #1e2836;color:var(--white);font-family:var(--font-mono);font-size:0.85rem;padding:0.75rem 1rem;outline:none;box-sizing:border-box;transition:border-color 0.2s}
+.auth-input:focus{border-color:var(--cyan)}
+.auth-btn{width:100%;background:var(--cyan);color:#000;font-family:var(--font-display);font-weight:700;font-size:0.85rem;padding:0.9rem;border:none;cursor:pointer;margin-top:0.5rem;transition:background 0.2s;letter-spacing:0.05em}
+.auth-btn:hover{background:var(--green)}
+.auth-btn:disabled{background:var(--muted);cursor:not-allowed}
+.auth-error{font-family:var(--font-mono);font-size:0.72rem;color:#ff4560;margin-top:0.8rem;min-height:1.2rem;text-align:center}
+.auth-success{font-family:var(--font-mono);font-size:0.72rem;color:#1ddd8a;margin-top:0.8rem;text-align:center}
+.auth-switch{font-family:var(--font-mono);font-size:0.65rem;color:var(--muted);text-align:center;margin-top:1.2rem}
+.auth-switch span{color:var(--cyan);cursor:pointer;text-decoration:underline}
+.auth-close{position:absolute;top:1rem;right:1rem;background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:1rem;line-height:1}
+.auth-close:hover{color:var(--red)}
+/* plan badge in app header */
+.plan-badge{font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;padding:3px 8px;border-radius:3px;background:#00e5c815;color:var(--cyan);border:1px solid #00e5c830}
+.plan-badge.free{background:#f5c01815;color:#f5c018;border-color:#f5c01830}
+.plan-badge.pro{background:#a855f715;color:#a855f7;border-color:#a855f730}
+.plan-badge.elite{background:#ff456015;color:#ff4560;border-color:#ff456030}
+/* user info strip in app header */
+#auth-user-strip{display:none;align-items:center;gap:0.6rem;font-family:var(--font-mono);font-size:0.65rem;color:var(--muted)}
+#auth-user-strip.show{display:flex}
+#auth-logout-btn{background:transparent;border:1px solid #1e2836;color:var(--muted);font-family:var(--font-mono);font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;padding:3px 8px;cursor:pointer;transition:all 0.2s}
+#auth-logout-btn:hover{border-color:var(--red);color:var(--red)}
 .app-body{padding:2rem;max-width:1400px;margin:0 auto}
 
 /* app cards */
@@ -684,6 +719,12 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
       <button class="app-tab" onclick="showTab('trade')">Trade Panel</button>
       <button class="app-tab" onclick="showTab('news')">News</button>
     </div>
+    <!-- User strip — shown when logged in -->
+    <div id="auth-user-strip">
+      <span id="auth-user-email" style="color:#5a7a96"></span>
+      <span id="auth-plan-badge" class="plan-badge free">FREE</span>
+      <button id="auth-logout-btn" onclick="authLogout()">Logout</button>
+    </div>
     <button class="app-close" onclick="closeApp()">✕ Close</button>
   </div>
 
@@ -849,7 +890,11 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   <!-- 🔥 THEN TOP STORIES -->
   <h2 style="margin:30px 0 10px 0;">Top stories</h2>
 
-  <div id="news-container" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;padding:0 0 2rem 0;"></div>
+  <div id="news-container" style="
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap:20px;
+  "></div>
 </div>
 
 <script>
@@ -898,15 +943,234 @@ const revealObs=new IntersectionObserver(entries=>{
 },{threshold:0.08});
 document.querySelectorAll('.reveal').forEach(el=>revealObs.observe(el));
 
-/* ─── App open/close ─── */
-function openApp(){
-  document.getElementById('app').classList.add('open');
-  document.body.style.overflow='hidden';
+/* ═══════════════════════════════════════════════════════════
+   AUTH SYSTEM — JWT + Supabase via backend API
+   ═══════════════════════════════════════════════════════════ */
+
+// ── State ────────────────────────────────────────────────────
+let _authToken = null;
+let _authUser  = null;
+
+// ── Token persistence (memory only — no localStorage) ────────
+function authGetToken()  { return _authToken; }
+function authGetUser()   { return _authUser; }
+function authIsLoggedIn(){ return !!_authToken; }
+
+function authSetSession(token, user){
+  _authToken = token;
+  _authUser  = user;
+  // Also store in sessionStorage so refresh keeps session alive
+  try {
+    sessionStorage.setItem('tt_token', token);
+    sessionStorage.setItem('tt_user',  JSON.stringify(user));
+  } catch(_){}
+  updateAuthUI();
 }
+
+function authClearSession(){
+  _authToken = null;
+  _authUser  = null;
+  try { sessionStorage.removeItem('tt_token'); sessionStorage.removeItem('tt_user'); } catch(_){}
+  updateAuthUI();
+}
+
+// Restore session on page load
+function authRestoreSession(){
+  try {
+    const token = sessionStorage.getItem('tt_token');
+    const user  = JSON.parse(sessionStorage.getItem('tt_user') || 'null');
+    if(token && user){ _authToken = token; _authUser = user; updateAuthUI(); }
+  } catch(_){}
+}
+
+// ── UI updates after login/logout ─────────────────────────────
+function updateAuthUI(){
+  const strip    = document.getElementById('auth-user-strip');
+  const emailEl  = document.getElementById('auth-user-email');
+  const badgeEl  = document.getElementById('auth-plan-badge');
+  const loginBtn = document.querySelector('.btn-nav[onclick="openApp()"]');
+
+  if(authIsLoggedIn() && _authUser){
+    // Show user strip in app header
+    if(strip)  { strip.classList.add('show'); }
+    if(emailEl){ emailEl.textContent = _authUser.email || ''; }
+    if(badgeEl){
+      const plan = _authUser.plan || 'free';
+      badgeEl.textContent = plan.toUpperCase();
+      badgeEl.className   = `plan-badge ${plan}`;
+    }
+    // Update nav button
+    if(loginBtn) loginBtn.textContent = 'Dashboard';
+  } else {
+    if(strip)    strip.classList.remove('show');
+    if(loginBtn) loginBtn.textContent = 'Log In';
+  }
+}
+
+// ── Modal open/close ──────────────────────────────────────────
+function openAuthModal(tab = 'login'){
+  switchAuthTab(tab);
+  document.getElementById('auth-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+  // Focus first input
+  setTimeout(() => {
+    const inp = tab === 'login'
+      ? document.getElementById('login-email')
+      : document.getElementById('reg-name');
+    if(inp) inp.focus();
+  }, 120);
+}
+
+function closeAuthModal(){
+  document.getElementById('auth-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  // Clear errors
+  ['login-error','reg-error'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = '';
+  });
+}
+
+function switchAuthTab(tab){
+  document.getElementById('auth-login-form').style.display    = tab==='login'    ? 'block' : 'none';
+  document.getElementById('auth-register-form').style.display = tab==='register' ? 'block' : 'none';
+  document.getElementById('tab-login-btn').classList.toggle('active', tab==='login');
+  document.getElementById('tab-reg-btn').classList.toggle('active',   tab==='register');
+}
+
+// Close modal on overlay click
+document.getElementById('auth-overlay').addEventListener('click', e => {
+  if(e.target === document.getElementById('auth-overlay')) closeAuthModal();
+});
+
+// ── openApp — now checks auth first ──────────────────────────
+function openApp(){
+  if(authIsLoggedIn()){
+    // Already logged in — open dashboard directly
+    document.getElementById('app').classList.add('open');
+    document.body.style.overflow = 'hidden';
+  } else {
+    // Not logged in — show auth modal
+    openAuthModal('login');
+  }
+}
+
 function closeApp(){
   document.getElementById('app').classList.remove('open');
-  document.body.style.overflow='';
+  document.body.style.overflow = '';
 }
+
+function authLogout(){
+  authClearSession();
+  closeApp();
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────
+async function authLogin(){
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-error');
+  const btn      = document.getElementById('login-btn');
+
+  errEl.textContent = '';
+
+  if(!email || !password){
+    errEl.textContent = 'Please enter email and password.';
+    return;
+  }
+
+  btn.disabled     = true;
+  btn.textContent  = 'Logging in...';
+
+  try {
+    const res  = await fetch(`${API}/api/auth/login`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+
+    if(!res.ok){
+      errEl.textContent = data.detail || 'Login failed. Check your email and password.';
+      return;
+    }
+
+    // Success
+    authSetSession(data.token, data.user);
+    closeAuthModal();
+    // Open dashboard
+    document.getElementById('app').classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+  } catch(err){
+    errEl.textContent = 'Network error — check your connection.';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Log In →';
+  }
+}
+
+// ── REGISTER ─────────────────────────────────────────────────
+async function authRegister(){
+  const name     = document.getElementById('reg-name').value.trim();
+  const email    = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const phone    = document.getElementById('reg-phone').value.trim();
+  const errEl    = document.getElementById('reg-error');
+  const btn      = document.getElementById('reg-btn');
+
+  errEl.textContent = '';
+
+  if(!name){ errEl.textContent = 'Please enter your name.'; return; }
+  if(!email){ errEl.textContent = 'Please enter your email.'; return; }
+  if(!password || password.length < 8){
+    errEl.textContent = 'Password must be at least 8 characters.';
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = 'Creating account...';
+
+  try {
+    const res  = await fetch(`${API}/api/auth/register`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ email, password, name, phone }),
+    });
+    const data = await res.json();
+
+    if(!res.ok){
+      errEl.textContent = data.detail || 'Registration failed. Try again.';
+      return;
+    }
+
+    // Success — log in immediately
+    authSetSession(data.token, data.user);
+    closeAuthModal();
+    document.getElementById('app').classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+  } catch(err){
+    errEl.textContent = 'Network error — check your connection.';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Create Free Account →';
+  }
+}
+
+// Enter key support on auth forms
+document.getElementById('login-password').addEventListener('keydown', e => {
+  if(e.key === 'Enter') authLogin();
+});
+document.getElementById('reg-phone').addEventListener('keydown', e => {
+  if(e.key === 'Enter') authRegister();
+});
+
+/* ─── App open/close ─── */
+// openApp and closeApp now defined in auth system above
+
+// Restore session on page load
+authRestoreSession();
 /* ─── Tabs ─── */
 function showTab(name){
   console.log("TAB CLICKED:", name);
@@ -924,7 +1188,7 @@ function showTab(name){
 
   // 🔥 THIS IS MISSING — ADD IT
   if(name === "news"){
-    newsLoaded = false;   // always refresh when switching to news tab
+    console.log("NEWS FUNCTION TRIGGERED");
     loadNews();
   }
 }
@@ -947,107 +1211,131 @@ function formatTime(raw){
 async function loadNews(){
   if(newsLoaded) return;
 
+  console.log("NEWS LOADING...");
+
   const container = document.getElementById("news-container");
   if(!container) return;
 
-  container.innerHTML = `<div style="color:#888;padding:1rem">Loading news...</div>`;
+  container.innerHTML = `<div style="color:#888">Loading news...</div>`;
 
   try{
     const res = await fetch(`${API}/api/news`);
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+    const sentiment = data.sentiment || 0;
 
-    // ── Sentiment — backend now returns a dict, not a plain number ──
-    const sent = data.sentiment || {};
-    const posCount    = typeof sent === 'object' ? (sent.positive || 0) : (sent > 0 ? sent : 0);
-    const negCount    = typeof sent === 'object' ? (sent.negative || 0) : (sent < 0 ? Math.abs(sent) : 0);
-    const apiVerdict  = typeof sent === 'object' ? (sent.verdict || 'MIXED') : (sent > 2 ? 'POSITIVE' : sent < -2 ? 'NEGATIVE' : 'MIXED');
-    const verdictText = typeof sent === 'object' ? (sent.verdict_text || '') : '';
+    document.getElementById("positive-news").textContent =
+    sentiment > 0 ? sentiment : 0;
 
-    document.getElementById("positive-news").textContent = posCount;
-    document.getElementById("negative-news").textContent = negCount;
+    document.getElementById("negative-news").textContent =
+    sentiment < 0 ? Math.abs(sentiment) : 0;
 
     const verdictEl = document.getElementById("news-verdict");
-    if(verdictEl){
-      // Map API verdict to display label
-      const labelMap  = { POSITIVE:"BULLISH", NEGATIVE:"BEARISH", MIXED:"MIXED", BULLISH:"BULLISH", BEARISH:"BEARISH" };
-      const colorMap  = { POSITIVE:"#1ddd8a", NEGATIVE:"#ff4560", MIXED:"#f5c018", BULLISH:"#1ddd8a", BEARISH:"#ff4560" };
-      const label = labelMap[apiVerdict] || "MIXED";
-      const color = colorMap[apiVerdict] || "#f5c018";
-      verdictEl.textContent        = label;
-      verdictEl.style.color        = color;
-      verdictEl.style.background   = "transparent";
-      verdictEl.style.border       = "none";
-      verdictEl.style.padding      = "0";
-      verdictEl.style.display      = "block";
-      verdictEl.style.fontFamily   = "var(--font-display)";
-      verdictEl.style.fontWeight   = "700";
-      verdictEl.style.fontSize     = "1.8rem";
+
+    // FIX 4: Market-aware verdict — news sentiment alone is not enough
+    // News keywords can be BULLISH while Nifty is DOWN — these are independent signals
+    // We now show BOTH and give a combined recommendation
+    const marketTrend = window._marketTrend || 'SIDEWAYS'; // set by loadMarket()
+
+    let newsVerdict, newsColor;
+    if(sentiment > 2){
+      newsVerdict = "BULLISH";
+      newsColor   = "#1ddd8a";
+    } else if(sentiment < -2){
+      newsVerdict = "BEARISH";
+      newsColor   = "#ff4560";
+    } else {
+      newsVerdict = "MIXED";
+      newsColor   = "#f5c018";
     }
 
-    // ── Recommendation — combine market trend + news verdict ──
-    // IMPORTANT: _marketTrend may not be loaded yet if news tab clicked first.
-    // Default to SIDEWAYS (neutral), never assume DOWN/BEARISH without confirmed data.
-    const marketTrend = window._marketTrend || 'SIDEWAYS';
-    const newsLabel   = (apiVerdict === 'POSITIVE' || apiVerdict === 'BULLISH') ? 'BULLISH'
-                      : (apiVerdict === 'NEGATIVE' || apiVerdict === 'BEARISH') ? 'BEARISH' : 'MIXED';
+    verdictEl.textContent = newsVerdict;
+    verdictEl.style.color = newsColor;
+    verdictEl.style.background = "transparent";
+    verdictEl.style.border = "none";
+    verdictEl.style.padding = "0";
+    verdictEl.style.display = "block";
+    verdictEl.style.fontFamily = "var(--font-display)";
+    verdictEl.style.fontWeight = "700";
+    verdictEl.style.fontSize   = "1.8rem";
+
+    // Dynamic recommendation based on BOTH market + news
     const recEl = document.getElementById('news-recommendation');
     if(recEl){
-      // Only show BEARISH block warning if market trend is CONFIRMED DOWN
       if(marketTrend === "DOWN"){
-        recEl.textContent = "⚠️ Market is BEARISH — trade cautiously, reduce position sizes.";
+        recEl.textContent = "⚠️ Market is BEARISH — no new trades. Scanner is blocked.";
         recEl.style.color = "#ff4560";
-      } else if(newsLabel === "BULLISH" && marketTrend === "UP"){
+      } else if(newsVerdict === "BULLISH" && marketTrend === "UP"){
         recEl.textContent = "✅ News + Market both BULLISH — good trading environment today.";
         recEl.style.color = "#1ddd8a";
-      } else if(newsLabel === "BEARISH" && marketTrend === "UP"){
+      } else if(newsVerdict === "BEARISH" && marketTrend === "UP"){
         recEl.textContent = "⚠️ Market UP but news BEARISH — trade smallest size, tighten stops.";
         recEl.style.color = "#f5c018";
-      } else if(newsLabel === "BULLISH"){
-        recEl.textContent = "✅ News sentiment BULLISH — watch for confirmation from Nifty.";
-        recEl.style.color = "#1ddd8a";
       } else {
-        recEl.textContent = verdictText || "📊 Mixed signals — trade only highest-score setups (80+).";
+        recEl.textContent = "📊 Mixed signals — trade only highest-score setups (80+).";
         recEl.style.color = "#f5c018";
       }
     }
 
-    // ── Render news cards — 4-column grid ──
-    container.innerHTML = "";
-    // Reset container to grid (in case it was changed)
-    container.style.display = "grid";
-    container.style.gridTemplateColumns = "repeat(auto-fit, minmax(280px, 1fr))";
-    container.style.gap = "16px";
+    newsLoaded = true;
 
-    if(!data.news || data.news.length === 0){
-      container.innerHTML = `<div style="color:gold;padding:1rem;grid-column:1/-1">No news available right now. Try again in a few minutes.</div>`;
-      newsLoaded = true;
+    console.log("NEWS DATA:", data);
+
+    container.innerHTML = "";
+
+    if(!data || !data.news || data.news.length === 0){
+      container.innerHTML = `<div style="color:gold">No news available</div>`;
       return;
     }
 
     data.news.forEach(n => {
       const div = document.createElement("div");
-      div.className = "news-card";
-      div.innerHTML = `
-        <div style="font-size:11px;color:#5a7a96;margin-bottom:8px;font-family:var(--font-mono);letter-spacing:0.04em">
-          ${formatTime(n.time)} &nbsp;·&nbsp; ${n.source || ''}
-        </div>
-        <div style="font-size:14px;color:#e8f0f8;line-height:1.6;font-weight:500">
-          ${n.title || ''}
-        </div>
-      `;
-      div.onmouseover = () => { div.style.borderColor = "rgba(0,229,200,0.35)"; div.style.background = "#111820"; };
-      div.onmouseout  = () => { div.style.borderColor = "#1e2836"; div.style.background = "#0d1117"; };
+
+      div.style = `
+  padding:14px 10px;
+  border-bottom:1px solid #1e2836;
+  cursor:pointer;
+  transition:all 0.2s ease;
+`;
+
+div.onmouseover = () => {
+  div.style.background = "rgba(255,255,255,0.03)";
+};
+
+div.onmouseout = () => {
+  div.style.background = "transparent";
+};
+
+div.innerHTML = `
+  <div style="
+    font-size:12px;
+    color:#888;
+    margin-bottom:6px;
+  ">
+    ${formatTime(n.time)} • ${n.source}
+  </div>
+
+  <div style="
+    font-size:15px;
+    color:#e8f0f8;
+    line-height:1.5;
+    font-weight:500;
+  ">
+    ${n.title}
+  </div>
+`;
       div.onclick = () => window.open(n.link, "_blank");
+
       container.appendChild(div);
     });
 
-    newsLoaded = true;
-
   }catch(err){
     newsLoaded = false;
+
     console.error("❌ News load failed:", err);
-    container.innerHTML = `<div style="color:#ff4560;padding:1rem">⚠️ Failed to load news. Check your connection.</div>`;
+
+    container.innerHTML = `
+      <div style="color:red">Failed to load news</div>
+    `;
   }
 }
 /* ─── RUN SCANNER (FINAL CLEAN VERSION) ─── */
@@ -1210,17 +1498,7 @@ async function loadNews(){
 
   try {
     const res = await fetch(`${API}/run-master-scan?capital=${capital}`);
-
-    // Capture real server error before throwing
-    if(!res.ok){
-      let errDetail = `Server returned ${res.status}`;
-      try {
-        const errJson = await res.json();
-        errDetail = errJson.detail || errJson.error || errDetail;
-      } catch(_){}
-      throw new Error(errDetail);
-    }
-
+    if(!res.ok) throw new Error("API failed");
     const data = await res.json();
 
     // Update market cards — Google Finance format
@@ -1338,27 +1616,17 @@ async function loadNews(){
 
   } catch(err){
     console.error('Scan error:', err);
-    const isColdStart = err.name === 'TypeError' || err.message?.includes('fetch') || err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError');
-    const isTimeout   = err.message?.includes('timeout') || err.message?.includes('abort');
-    const is503       = err.message?.includes('503') || err.message?.includes('502');
-
-    let errHtml = '';
-    if(isColdStart || isTimeout || is503){
-      errHtml = `
-        <div style="text-align:center;padding:2.5rem;font-family:var(--font-mono)">
-          <div style="font-size:1.5rem;margin-bottom:1rem">⏳</div>
-          <div style="color:#f5c018;font-size:0.85rem;margin-bottom:0.5rem">Server is waking up — Railway cold start (~30 seconds)</div>
-          <div style="color:#3d5068;font-size:0.72rem">Wait 30 seconds and click Run Scanner again</div>
-        </div>`;
-    } else {
-      errHtml = `
-        <div style="text-align:center;padding:2.5rem;font-family:var(--font-mono)">
-          <div style="font-size:1.5rem;margin-bottom:1rem">❌</div>
-          <div style="color:#ff4560;font-size:0.85rem;margin-bottom:0.5rem">Scanner error: ${err.message}</div>
-          <div style="color:#3d5068;font-size:0.72rem">Open F12 → Console for full details · Check api.takshvitrade.com/health</div>
-        </div>`;
-    }
-    document.getElementById('signals-body').innerHTML = errHtml;
+    // Only show "waking up" for actual network/fetch errors
+    // Not for JS rendering bugs
+    const isNetworkError = err.name==='TypeError' && err.message?.includes('fetch');
+    const isTimeoutError = err.message?.includes('timeout') || err.message?.includes('abort');
+    document.getElementById('signals-body').innerHTML = `
+      <div style="text-align:center;padding:2rem;font-family:var(--font-mono);font-size:0.8rem">
+        ${isNetworkError || isTimeoutError
+          ? `<span style="color:#f5c018">⏳ Server waking up — wait 30s and try again</span>`
+          : `<span style="color:#ff4560">❌ Render error: ${err.message} — check console (F12)</span>`
+        }
+      </div>`;
   } finally{
     clearInterval(timerInterval);
     const totalTime = ((Date.now() - scanStart) / 1000).toFixed(1);
@@ -1535,15 +1803,10 @@ function showTrade(stock, entry, sl, target, qty){
 /* ─── MARKET LIVE DATA ─── */
 function round2(n){ return Math.round(n * 100) / 100; }
 
-// Retry counter for cold-start resilience
-let _marketRetry = 0;
-
 async function loadMarket(){
   try{
     const res = await fetch(`${API}/api/market/nifty`);
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    _marketRetry = 0; // reset on success
 
     const trend = data.trend || 'SIDEWAYS';
     const color = trend === "UP" ? "#1ddd8a" : trend === "DOWN" ? "#ff4560" : "#f5c018";
@@ -1613,23 +1876,12 @@ async function loadMarket(){
     window._marketTrend = trend;
 
   }catch(err){
-    _marketRetry++;
-    console.warn(`Market fetch failed (attempt ${_marketRetry}):`, err);
-    if(_marketRetry <= 4){
-      // Silent retry: 5s, 10s, 20s, 40s — don't show error to user yet
-      const delay = Math.min(5000 * _marketRetry, 40000);
-      setTimeout(loadMarket, delay);
-      // Only update UI to show loading dots, not "data unavailable"
-      const verdictEl = document.getElementById('nifty-verdict');
-      if(verdictEl && verdictEl.textContent === '') verdictEl.textContent = '...';
-    } else {
-      // After 4 retries, show error
-      const priceEl = document.getElementById('nifty-price');
-      if(priceEl) priceEl.textContent = '--';
-      const verdictEl = document.getElementById('nifty-verdict');
-      if(verdictEl) verdictEl.textContent = 'market data unavailable — retrying';
-      window._marketTrend = 'SIDEWAYS';
-    }
+    const priceEl = document.getElementById('nifty-price');
+    if(priceEl) priceEl.textContent = '--';
+    const verdictEl = document.getElementById('nifty-verdict');
+    if(verdictEl) verdictEl.textContent = 'MARKET — data unavailable';
+    window._marketTrend = 'SIDEWAYS';
+    console.warn("Market fetch failed:", err);
   }
 }
 
@@ -1873,5 +2125,57 @@ function downloadCSV(){
   border-radius:6px;
   overflow:hidden;
 "></div>
+<!-- ═══════════ AUTH MODAL ═══════════ -->
+<div id="auth-overlay">
+  <div class="auth-box">
+    <button class="auth-close" onclick="closeAuthModal()">✕</button>
+    <div class="auth-logo">TAKSHVI<em>.</em>TRADE</div>
+    <div class="auth-tagline">NSE Signal Intelligence</div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login-btn"  onclick="switchAuthTab('login')">Log In</button>
+      <button class="auth-tab"        id="tab-reg-btn"    onclick="switchAuthTab('register')">Register</button>
+    </div>
+
+    <!-- LOGIN FORM -->
+    <div id="auth-login-form">
+      <div class="auth-field">
+        <label class="auth-label">Email</label>
+        <input class="auth-input" id="login-email" type="email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Password</label>
+        <input class="auth-input" id="login-password" type="password" placeholder="••••••••" autocomplete="current-password"/>
+      </div>
+      <button class="auth-btn" id="login-btn" onclick="authLogin()">Log In →</button>
+      <div class="auth-error" id="login-error"></div>
+      <div class="auth-switch">No account? <span onclick="switchAuthTab('register')">Register free</span></div>
+    </div>
+
+    <!-- REGISTER FORM -->
+    <div id="auth-register-form" style="display:none">
+      <div class="auth-field">
+        <label class="auth-label">Full Name</label>
+        <input class="auth-input" id="reg-name" type="text" placeholder="Vivek Rawat"/>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Email</label>
+        <input class="auth-input" id="reg-email" type="email" placeholder="you@example.com" autocomplete="email"/>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Password <span style="color:#3d5068;font-size:0.6rem">(min 8 characters)</span></label>
+        <input class="auth-input" id="reg-password" type="password" placeholder="••••••••" autocomplete="new-password"/>
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">WhatsApp Number <span style="color:#3d5068;font-size:0.6rem">(optional)</span></label>
+        <input class="auth-input" id="reg-phone" type="tel" placeholder="9876543210"/>
+      </div>
+      <button class="auth-btn" id="reg-btn" onclick="authRegister()">Create Free Account →</button>
+      <div class="auth-error" id="reg-error"></div>
+      <div class="auth-switch">Already have an account? <span onclick="switchAuthTab('login')">Log in</span></div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>

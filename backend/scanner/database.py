@@ -311,15 +311,19 @@ def get_alert_logs(limit: int = 50) -> list:
 # ════════════════════════════════════════════════════════════
 
 def upsert_user(email: str, name: str = "", phone: str = "", plan: str = "free",
-                capital: float = 100000, alerts_enabled: bool = False):
-    return _upsert("users", {
+                capital: float = 100000, alerts_enabled: bool = False,
+                password_hash: str = ""):
+    row = {
         "id":             str(uuid.uuid4()),
         "created_at":     datetime.now(timezone.utc).isoformat(),
         "email":          email, "phone": phone, "name": name,
         "plan":           plan, "plan_expires_at": None,
         "is_active":      True, "capital": capital,
         "alerts_enabled": alerts_enabled,
-    }, on_conflict="email")
+    }
+    if password_hash:
+        row["password_hash"] = password_hash
+    return _upsert("users", row, on_conflict="email")
 
 
 def get_user_by_email(email: str) -> Optional[dict]:
