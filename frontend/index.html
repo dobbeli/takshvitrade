@@ -466,7 +466,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   </ul>
   <div class="nav-right">
     <a href="#" class="btn-nav" onclick="openApp()">Log In</a>
-    <a href="#" class="btn-nav btn-nav-solid" onclick="openRegisterModal(); return false;">Start Free</a>
+    <a href="#pricing" class="btn-nav btn-nav-solid">Start Free</a>
   </div>
 </nav>
 
@@ -489,7 +489,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   <p class="hero-body">ATR-adaptive stops. Multi-factor scoring. 6-point pre-approval. Groww-ready order sheets — all automated, every trading day.</p>
 
   <div class="hero-actions">
-    <a href="#" class="btn-primary" onclick="openRegisterModal(); return false;">Start Free — ₹0</a>
+    <a href="#pricing" class="btn-primary">Start Free — ₹0</a>
     <button class="btn-ghost" onclick="openApp()">Open Dashboard →</button>
   </div>
 </section>
@@ -602,7 +602,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
       <div class="p-price"><span class="sym">₹</span>0</div>
       <div class="p-desc">3 signals/day · swing only · 15-min delay</div>
       <ul class="p-list"><li>Swing scanner access</li><li>3 signals per day</li><li>15-minute delay</li><li>Dashboard view</li></ul>
-      <button class="p-btn" onclick="openRegisterModal()">Get Started</button>
+      <button class="p-btn" onclick="openApp()">Get Started</button>
     </div>
     <div class="p-card hot">
       <div class="p-plan">Basic</div>
@@ -684,7 +684,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   <h2>Your first 3 signals<br/>are free. Always.</h2>
   <p>No credit card. No lock-in. Just data-driven swing trades backed by ATR volatility and a 6-point pre-approval system.</p>
   <div class="cta-actions">
-    <button class="btn-primary" onclick="openRegisterModal()">Open Dashboard — Free</button>
+    <button class="btn-primary" onclick="openApp()">Open Dashboard — Free</button>
     <a href="#scanners" class="btn-ghost">Explore Scanners</a>
   </div>
 </section>
@@ -1010,9 +1010,7 @@ function updateAuthUI(){
 // ── Modal open/close ──────────────────────────────────────────
 function openAuthModal(tab = 'login'){
   switchAuthTab(tab);
-  const overlay = document.getElementById('auth-overlay');
-  if(!overlay) return;
-  overlay.classList.add('open');
+  document.getElementById('auth-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
   // Focus first input
   setTimeout(() => {
@@ -1024,9 +1022,7 @@ function openAuthModal(tab = 'login'){
 }
 
 function closeAuthModal(){
-  const overlay = document.getElementById('auth-overlay');
-  if(!overlay) return;
-  overlay.classList.remove('open');
+  document.getElementById('auth-overlay').classList.remove('open');
   document.body.style.overflow = '';
   // Clear errors
   ['login-error','reg-error'].forEach(id => {
@@ -1042,15 +1038,10 @@ function switchAuthTab(tab){
   document.getElementById('tab-reg-btn').classList.toggle('active',   tab==='register');
 }
 
-function openRegisterModal(prefillEmail = ''){
-  openAuthModal('register');
-  const regEmail = document.getElementById('reg-email');
-  if(regEmail && prefillEmail && !regEmail.value.trim()){
-    regEmail.value = prefillEmail;
-  }
-}
+// ── DOM-dependent auth event listeners — must run AFTER HTML is parsed ──
+document.addEventListener('DOMContentLoaded', () => {
 
-function initAuthBindings(){
+  // Close modal on overlay click
   const overlay = document.getElementById('auth-overlay');
   if(overlay){
     overlay.addEventListener('click', e => {
@@ -1058,20 +1049,25 @@ function initAuthBindings(){
     });
   }
 
-  const loginPassword = document.getElementById('login-password');
-  if(loginPassword){
-    loginPassword.addEventListener('keydown', e => {
+  // Enter key on login password field
+  const loginPwd = document.getElementById('login-password');
+  if(loginPwd){
+    loginPwd.addEventListener('keydown', e => {
       if(e.key === 'Enter') authLogin();
     });
   }
 
+  // Enter key on register phone field
   const regPhone = document.getElementById('reg-phone');
   if(regPhone){
     regPhone.addEventListener('keydown', e => {
       if(e.key === 'Enter') authRegister();
     });
   }
-}
+
+  // Restore session from sessionStorage
+  authRestoreSession();
+});
 
 // ── openApp — now checks auth first ──────────────────────────
 function openApp(){
@@ -1121,14 +1117,6 @@ async function authLogin(){
     const data = await res.json();
 
     if(!res.ok){
-      if(res.status === 401 && (data.detail || '').includes('No account found')){
-        openRegisterModal(email);
-        const regErr = document.getElementById('reg-error');
-        if(regErr){
-          regErr.textContent = 'No account found with this email. Create your free account below.';
-        }
-        return;
-      }
       errEl.textContent = data.detail || 'Login failed. Check your email and password.';
       return;
     }
@@ -1198,12 +1186,6 @@ async function authRegister(){
 
 /* ─── App open/close ─── */
 // openApp and closeApp now defined in auth system above
-
-// Restore session on page load
-document.addEventListener('DOMContentLoaded', () => {
-  initAuthBindings();
-  authRestoreSession();
-});
 /* ─── Tabs ─── */
 function showTab(name){
   console.log("TAB CLICKED:", name);
