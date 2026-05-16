@@ -466,7 +466,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   </ul>
   <div class="nav-right">
     <a href="#" class="btn-nav" onclick="openApp()">Log In</a>
-    <a href="#pricing" class="btn-nav btn-nav-solid">Start Free</a>
+    <a href="#" class="btn-nav btn-nav-solid" onclick="openRegisterModal(); return false;">Start Free</a>
   </div>
 </nav>
 
@@ -489,7 +489,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   <p class="hero-body">ATR-adaptive stops. Multi-factor scoring. 6-point pre-approval. Groww-ready order sheets — all automated, every trading day.</p>
 
   <div class="hero-actions">
-    <a href="#pricing" class="btn-primary">Start Free — ₹0</a>
+    <a href="#" class="btn-primary" onclick="openRegisterModal(); return false;">Start Free — ₹0</a>
     <button class="btn-ghost" onclick="openApp()">Open Dashboard →</button>
   </div>
 </section>
@@ -602,7 +602,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
       <div class="p-price"><span class="sym">₹</span>0</div>
       <div class="p-desc">3 signals/day · swing only · 15-min delay</div>
       <ul class="p-list"><li>Swing scanner access</li><li>3 signals per day</li><li>15-minute delay</li><li>Dashboard view</li></ul>
-      <button class="p-btn" onclick="openApp()">Get Started</button>
+      <button class="p-btn" onclick="openRegisterModal()">Get Started</button>
     </div>
     <div class="p-card hot">
       <div class="p-plan">Basic</div>
@@ -684,7 +684,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
   <h2>Your first 3 signals<br/>are free. Always.</h2>
   <p>No credit card. No lock-in. Just data-driven swing trades backed by ATR volatility and a 6-point pre-approval system.</p>
   <div class="cta-actions">
-    <button class="btn-primary" onclick="openApp()">Open Dashboard — Free</button>
+    <button class="btn-primary" onclick="openRegisterModal()">Open Dashboard — Free</button>
     <a href="#scanners" class="btn-ghost">Explore Scanners</a>
   </div>
 </section>
