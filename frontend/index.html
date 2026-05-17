@@ -1915,12 +1915,15 @@ async function loadMarket(){
 /* CALL MARKET */
  loadMarket();
  setInterval(loadMarket, 300000);
- showTab('signals');
- document.getElementById('capital-input').addEventListener('input', (e)=>{
-  const val = Math.floor(Number(e.target.value)) || 0;
-  document.getElementById('capital-display').textContent =
-    val ? `₹${val.toLocaleString('en-IN')}` : '—';
-});
+ const _capInput = document.getElementById('capital-input');
+ if(_capInput){
+   showTab('signals');
+   _capInput.addEventListener('input', (e)=>{
+     const val = Math.floor(Number(e.target.value)) || 0;
+     document.getElementById('capital-display').textContent =
+       val ? `₹${val.toLocaleString('en-IN')}` : '—';
+   });
+ }
 // SHOW CHART FUNCTION
 // TradingView blocks iframe embedding on non-partner domains
 // Using Screener.in which allows embedding for NSE stocks
