@@ -2160,6 +2160,144 @@ function downloadCSV(){
   // FIX: Was hardcoded to 127.0.0.1:8000 — now uses API variable (works on Render/cloud too)
   window.open(`${API}/download-csv?capital=${capital}`);
 }
+
+// ══════════════════════════════════════════════
+// OUTCOME TRACKING
+// ══════════════════════════════════════════════
+window._outcomes = {};
+window._omTrade  = {};
+
+function openOutcomeModal(stock, entry, sl, target, qty, defaultOutcome, direction){
+  window._omTrade = {stock, entry, sl, target, qty, direction};
+  document.getElementById('om-title').textContent = 'Mark Trade — ' + stock;
+  document.getElementById('om-sub').textContent   = direction + ' · Entry ₹' + Number(entry).toLocaleString('en-IN') + ' · Target ₹' + Number(target).toLocaleString('en-IN') + ' · SL ₹' + Number(sl).toLocaleString('en-IN');
+  const exitEl = document.getElementById('om-exit');
+  if(defaultOutcome === 'WIN')  exitEl.value = target;
+  if(defaultOutcome === 'LOSS') exitEl.value = sl;
+  document.getElementById('om-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('om-error').textContent = '';
+  document.getElementById('om-notes').value = '';
+  document.getElementById('om-submit-win').style.opacity  = defaultOutcome === 'WIN'  ? '1' : '0.5';
+  document.getElementById('om-submit-loss').style.opacity = defaultOutcome === 'LOSS' ? '1' : '0.5';
+  document.getElementById('outcome-modal').classList.add('open');
+  setTimeout(() => exitEl.focus(), 100);
+}
+
+async function submitOutcome(result){
+  const t       = window._omTrade;
+  const exitVal = parseFloat(document.getElementById('om-exit').value);
+  const errEl   = document.getElementById('om-error');
+  errEl.textContent = '';
+  if(!exitVal || isNaN(exitVal) || exitVal <= 0){ errEl.textContent = 'Please enter a valid exit price.'; return; }
+  if(!_authToken){ errEl.textContent = 'You must be logged in to track outcomes.'; return; }
+  const pnlPerShare = t.direction === 'LONG' ? exitVal - t.entry : t.entry - exitVal;
+  const pnlTotal    = Math.round(pnlPerShare * t.qty * 100) / 100;
+  const exitDate    = document.getElementById('om-date').value || new Date().toISOString().split('T')[0];
+  const notes       = document.getElementById('om-notes').value.trim();
+  const btnW = document.getElementById('om-submit-win');
+  const btnL = document.getElementById('om-submit-loss');
+  btnW.disabled = btnL.disabled = true;
+  btnW.textContent = btnL.textContent = 'Saving...';
+  const payload = {stock:t.stock,direction:t.direction,entry:t.entry,sl:t.sl,target:t.target,qty:t.qty,exit_price:exitVal,exit_date:exitDate,outcome:result,pnl_per_share:Math.round(pnlPerShare*100)/100,pnl_total:pnlTotal,notes};
+  try {
+    const res = await fetch(API + '/api/outcomes?token=' + encodeURIComponent(_authToken), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if(res.ok){
+      window._outcomes[t.stock + '_' + t.entry] = result;
+      document.getElementById('outcome-modal').classList.remove('open');
+      showOutcomeToast(result, t.stock, pnlTotal);
+      loadPerformanceSummary();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      errEl.textContent = err.detail || 'Failed to save. Try again.';
+    }
+  } catch(e) {
+    saveOutcomeLocally({...payload, saved_at: new Date().toISOString()});
+    window._outcomes[t.stock + '_' + t.entry] = result;
+    document.getElementById('outcome-modal').classList.remove('open');
+    showOutcomeToast(result, t.stock, pnlTotal);
+    loadPerformanceSummary();
+  } finally {
+    btnW.disabled = btnL.disabled = false;
+    btnW.textContent = '✓ Mark WIN';
+    btnL.textContent = '✗ Mark LOSS';
+  }
+}
+
+async function markOutcome(stock, entry, sl, target, qty, result, direction, exitPrice, exitDate){
+  window._outcomes[stock + '_' + entry] = result;
+  try {
+    await fetch(API + '/api/outcomes?token=' + encodeURIComponent(_authToken||''), {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({stock,entry,sl,target,qty,direction,outcome:result,exit_price:exitPrice,exit_date:exitDate,pnl_per_share:null,pnl_total:null})
+    });
+  } catch(e) {
+    saveOutcomeLocally({stock,entry,outcome:result,saved_at:new Date().toISOString()});
+  }
+  loadPerformanceSummary();
+}
+
+function saveOutcomeLocally(data){
+  const saved = JSON.parse(localStorage.getItem('tt_outcomes') || '[]');
+  const idx = saved.findIndex(t => t.stock === data.stock && t.entry === data.entry);
+  if(idx >= 0) saved[idx] = data; else saved.push(data);
+  localStorage.setItem('tt_outcomes', JSON.stringify(saved));
+}
+
+function showOutcomeToast(result, stock, pnl){
+  const toast = document.createElement('div');
+  const isWin = result === 'WIN';
+  toast.style.cssText = 'position:fixed;bottom:2rem;right:2rem;z-index:9999999;background:' + (isWin?'#1ddd8a':'#ff4560') + ';color:' + (isWin?'#000':'#fff') + ';font-family:var(--font-mono);font-size:0.72rem;padding:0.75rem 1.25rem;border-radius:4px;letter-spacing:0.05em;box-shadow:0 4px 20px rgba(0,0,0,0.4)';
+  toast.textContent = (isWin ? '✓ WIN' : '✗ LOSS') + ' — ' + stock + ' · P&L ₹' + Number(pnl).toLocaleString('en-IN');
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
+}
+
+async function loadPerformanceSummary(){
+  const el = document.getElementById('perf-summary');
+  if(!el) return;
+  let trades = JSON.parse(localStorage.getItem('tt_outcomes') || '[]');
+  // Try to load from API
+  if(_authToken){
+    try {
+      const res = await fetch(API + '/api/outcomes?token=' + encodeURIComponent(_authToken));
+      if(res.ok){
+        const data = await res.json();
+        if(data.trades && data.trades.length > 0) trades = data.trades;
+        // Also cache outcomes for button state
+        trades.forEach(t => { window._outcomes[t.stock + '_' + t.entry] = t.outcome; });
+      }
+    } catch(e) {}
+  }
+  const wins   = trades.filter(t => t.outcome === 'WIN');
+  const losses = trades.filter(t => t.outcome === 'LOSS');
+  const total  = wins.length + losses.length;
+  const winRate  = total > 0 ? Math.round(wins.length / total * 100) : 0;
+  const totalPnl = trades.reduce((s,t) => s + (t.pnl_total||0), 0);
+  const avgWin   = wins.length   > 0 ? Math.round(wins.reduce((s,t)=>s+(t.pnl_total||0),0)   / wins.length)   : 0;
+  const avgLoss  = losses.length > 0 ? Math.round(losses.reduce((s,t)=>s+(t.pnl_total||0),0) / losses.length) : 0;
+  if(total === 0){ el.innerHTML = '<div style="font-family:var(--font-mono);font-size:0.65rem;color:#3d5068">No trades tracked yet — mark trades as WIN or LOSS to see performance stats.</div>'; return; }
+  el.innerHTML = [
+    {label:'TRADES', val: total, color:'#e8e8e8'},
+    {label:'WIN RATE', val: winRate+'%', color: winRate>=50?'#1ddd8a':'#ff4560'},
+    {label:'TOTAL P&L', val: (totalPnl>=0?'+':'')+'₹'+Math.abs(Math.round(totalPnl)).toLocaleString('en-IN'), color: totalPnl>=0?'#1ddd8a':'#ff4560'},
+    {label:'AVG WIN', val: '+₹'+Number(avgWin).toLocaleString('en-IN'), color:'#1ddd8a'},
+    {label:'AVG LOSS', val: '−₹'+Math.abs(Number(avgLoss)).toLocaleString('en-IN'), color:'#ff4560'},
+    {label:'W / L', val: wins.length+' / '+losses.length, color:'#5a7a96'},
+  ].map(c => '<div class="perf-card"><div class="pc-label">'+c.label+'</div><div class="pc-val" style="color:'+c.color+'">'+c.val+'</div></div>').join('');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const om = document.getElementById('outcome-modal');
+  if(om) om.addEventListener('click', e => { if(e.target === om) om.classList.remove('open'); });
+  setTimeout(loadPerformanceSummary, 1000);
+});
+// ══════════════════════════════════════════════
+
 </script>
 <!-- ─── FULL CHART MODAL ─── -->
 <div id="chart-modal" style="

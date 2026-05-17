@@ -73,13 +73,22 @@ class OutcomeRequest(BaseModel):
 
 
 # ── Auth helper ───────────────────────────────────────────────
+from fastapi import Query
+
 def get_email_from_token(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer)
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    token: str = Query(default=None)
 ) -> str:
-    if not credentials:
+    # Accept token from Authorization header OR ?token= query param
+    raw_token = None
+    if credentials:
+        raw_token = credentials.credentials
+    elif token:
+        raw_token = token
+    if not raw_token:
         raise HTTPException(status_code=401, detail="Authentication required")
     try:
-        payload = jwt.decode(credentials.credentials, SECRET, algorithms=[ALGO])
+        payload = jwt.decode(raw_token, SECRET, algorithms=[ALGO])
         return payload.get("sub", "")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired — please log in again")
