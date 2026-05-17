@@ -38,8 +38,8 @@ html{scroll-behavior:smooth}
 body{background:var(--black);color:var(--text);font-family:var(--font-body);font-weight:300;overflow-x:hidden;cursor:none}
 
 /* custom cursor */
-#cursor{position:fixed;width:8px;height:8px;background:var(--cyan);border-radius:50%;pointer-events:none;z-index:9999;transition:transform 0.1s;mix-blend-mode:difference}
-#cursor-ring{position:fixed;width:32px;height:32px;border:1px solid rgba(0,229,200,0.4);border-radius:50%;pointer-events:none;z-index:9998;transition:all 0.15s ease}
+#cursor{position:fixed;width:10px;height:10px;background:#00e5c8;border-radius:50%;pointer-events:none;z-index:999999;transition:transform 0.1s;box-shadow:0 0 8px #00e5c8,0 0 2px #fff}
+#cursor-ring{position:fixed;width:34px;height:34px;border:1.5px solid rgba(0,229,200,0.75);border-radius:50%;pointer-events:none;z-index:999998;transition:all 0.15s ease;box-shadow:0 0 6px rgba(0,229,200,0.3)}
 
 /* noise */
 body::after{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");pointer-events:none;z-index:1}
