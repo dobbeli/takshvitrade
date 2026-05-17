@@ -64,7 +64,7 @@ nav.scrolled{border-bottom-color:rgba(0,229,200,0.15)}
   radial-gradient(ellipse 60% 50% at 20% 30%, rgba(0,229,200,0.07) 0%, transparent 60%),
   radial-gradient(ellipse 40% 60% at 80% 70%, rgba(29,221,138,0.04) 0%, transparent 60%);
   pointer-events:none}
-.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,229,200,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,200,0.03) 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(ellipse 90% 70% at 50% 40%,black,transparent);pointer-events:none}
+.hero-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,229,200,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,200,0.03) 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(ellipse 90% 70% at 50% 40%,black,transparent)}
 .eyebrow{font-family:var(--font-mono);font-size:0.68rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--cyan);margin-bottom:1.8rem;display:flex;align-items:center;gap:0.8rem}
 .eyebrow::before{content:'';width:28px;height:1px;background:var(--cyan);flex-shrink:0}
 h1{font-family:var(--font-display);font-weight:800;font-size:clamp(3.2rem,8vw,7.5rem);line-height:0.92;letter-spacing:-0.05em;color:var(--white);margin-bottom:2.2rem;max-width:1000px}
@@ -244,8 +244,8 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 .app-close:hover{border-color:var(--red);color:var(--red)}
 
 /* ── AUTH MODAL ─────────────────────────────────────────────── */
-#auth-overlay{display:flex;visibility:hidden;opacity:0;pointer-events:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:99999;align-items:center;justify-content:center;backdrop-filter:blur(4px);transition:opacity 0.2s}
-#auth-overlay.open{visibility:visible;opacity:1;pointer-events:all}
+#auth-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:900;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+#auth-overlay.open{display:flex}
 .auth-box{background:#0d1117;border:1px solid #1e2836;width:100%;max-width:420px;padding:2.5rem;position:relative;animation:authSlide 0.2s ease}
 @keyframes authSlide{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
 .auth-logo{font-family:var(--font-display);font-weight:800;font-size:1.2rem;color:var(--white);margin-bottom:0.4rem}
@@ -465,7 +465,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
     <li><a href="#roadmap">Roadmap</a></li>
   </ul>
   <div class="nav-right">
-    <button class="btn-nav" onclick="navLoginClick()" id="nav-login-btn">Log In</button>
+    <button class="btn-nav" onclick="openApp()" id="nav-login-btn">Log In</button>
     <a href="#pricing" class="btn-nav btn-nav-solid">Start Free</a>
   </div>
 </nav>
@@ -1062,9 +1062,10 @@ function updateAuthUI(){
 // ── Modal open/close ──────────────────────────────────────────
 function openAuthModal(tab = 'login'){
   switchAuthTab(tab);
-  document.getElementById('auth-overlay').classList.add('open');
+  const overlay = document.getElementById('auth-overlay');
+  if(!overlay){ console.error('auth-overlay not found'); return; }
+  overlay.style.display = 'flex';
   document.body.style.overflow = 'hidden';
-  // Focus first input
   setTimeout(() => {
     const inp = tab === 'login'
       ? document.getElementById('login-email')
@@ -1074,13 +1075,14 @@ function openAuthModal(tab = 'login'){
 }
 
 function closeAuthModal(){
-  document.getElementById('auth-overlay').classList.remove('open');
+  const overlay = document.getElementById('auth-overlay');
+  if(overlay) overlay.style.display = 'none';
   document.body.style.overflow = '';
-  // Clear errors
   ['login-error','reg-error'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.textContent = '';
   });
+}
 }
 
 function switchAuthTab(tab){
@@ -1093,7 +1095,6 @@ function switchAuthTab(tab){
 // ── DOM-dependent auth event listeners — must run AFTER HTML is parsed ──
 document.addEventListener('DOMContentLoaded', () => {
 
-  // Close modal on overlay click
   const overlay = document.getElementById('auth-overlay');
   if(overlay){
     overlay.addEventListener('click', e => {
@@ -1121,30 +1122,20 @@ document.addEventListener('DOMContentLoaded', () => {
   authRestoreSession();
 });
 
-// ── navLoginClick — nav Log In button ────────────────────────
-function navLoginClick(){
-  if(authIsLoggedIn()){
-    document.getElementById('app').classList.add('open');
-    document.body.style.overflow = 'hidden';
-  } else {
-    openAuthModal('login');
-  }
-}
-
 // ── openApp — now checks auth first ──────────────────────────
 function openApp(){
   if(authIsLoggedIn()){
-    // Already logged in — open dashboard directly
-    document.getElementById('app').classList.add('open');
+    const app = document.getElementById('app');
+    if(app) app.style.display = 'block';
     document.body.style.overflow = 'hidden';
   } else {
-    // Not logged in — show auth modal
     openAuthModal('login');
   }
 }
 
 function closeApp(){
-  document.getElementById('app').classList.remove('open');
+  const app = document.getElementById('app');
+  if(app) app.style.display = 'none';
   document.body.style.overflow = '';
 }
 
@@ -1187,7 +1178,8 @@ async function authLogin(){
     authSetSession(data.token, data.user);
     closeAuthModal();
     // Open dashboard
-    document.getElementById('app').classList.add('open');
+    const app = document.getElementById('app');
+    if(app) app.style.display = 'block';
     document.body.style.overflow = 'hidden';
 
   } catch(err){
@@ -1235,7 +1227,8 @@ async function authRegister(){
     // Success — log in immediately
     authSetSession(data.token, data.user);
     closeAuthModal();
-    document.getElementById('app').classList.add('open');
+    const app = document.getElementById('app');
+    if(app) app.style.display = 'block';
     document.body.style.overflow = 'hidden';
 
   } catch(err){
