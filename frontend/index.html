@@ -132,6 +132,35 @@ h2{font-family:var(--font-display);font-weight:800;font-size:clamp(2.2rem,4.5vw,
 #signals-sec{background:var(--black)}
 .sig-layout{display:grid;grid-template-columns:1.2fr 1fr;gap:5rem;align-items:start}
 
+
+/* ── Outcome tracking ── */
+.outcome-btn{font-family:var(--font-mono);font-size:0.58rem;letter-spacing:0.08em;padding:3px 7px;border-radius:3px;cursor:pointer;border:1px solid;transition:all 0.15s;margin-right:3px}
+.outcome-btn.win{background:transparent;color:#1ddd8a;border-color:#1ddd8a40}
+.outcome-btn.win:hover,.outcome-btn.win.active{background:#1ddd8a;color:#000;border-color:#1ddd8a}
+.outcome-btn.loss{background:transparent;color:#ff4560;border-color:#ff456040}
+.outcome-btn.loss:hover,.outcome-btn.loss.active{background:#ff4560;color:#fff;border-color:#ff4560}
+.outcome-btn.open{background:transparent;color:#3d5068;border-color:#1e2836}
+.outcome-btn.open:hover{color:#5a7a96;border-color:#5a7a96}
+#outcome-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:999998;align-items:center;justify-content:center}
+#outcome-modal.open{display:flex}
+.outcome-box{background:#0d1117;border:1px solid #1e2836;width:440px;max-width:92vw;padding:2rem;border-radius:4px}
+.outcome-box h3{font-family:var(--font-display);font-size:1.1rem;margin:0 0 0.3rem;color:#e8e8e8}
+.outcome-box .sub{font-family:var(--font-mono);font-size:0.65rem;color:#3d5068;margin-bottom:1.4rem;letter-spacing:0.08em}
+.outcome-field{margin-bottom:1rem}
+.outcome-field label{font-family:var(--font-mono);font-size:0.62rem;color:#5a7a96;letter-spacing:0.1em;text-transform:uppercase;display:block;margin-bottom:0.35rem}
+.outcome-field input{width:100%;background:#080b0e;border:1px solid #1e2836;color:#e8e8e8;font-family:var(--font-mono);font-size:0.85rem;padding:0.55rem 0.75rem;box-sizing:border-box;border-radius:3px;outline:none}
+.outcome-field input:focus{border-color:#00e5c840}
+.outcome-btns-row{display:flex;gap:0.6rem;margin-top:1.4rem}
+.outcome-submit{flex:1;padding:0.65rem;font-family:var(--font-mono);font-size:0.7rem;letter-spacing:0.1em;text-transform:uppercase;border:none;border-radius:3px;cursor:pointer;font-weight:600}
+.outcome-submit.win{background:#1ddd8a;color:#000}
+.outcome-submit.loss{background:#ff4560;color:#fff}
+.outcome-submit.cancel{background:transparent;border:1px solid #1e2836;color:#3d5068;flex:0.4}
+.outcome-submit.cancel:hover{border-color:#5a7a96;color:#5a7a96}
+#perf-summary{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem}
+.perf-card{background:#0d1117;border:1px solid #1e2836;padding:1rem 1.4rem;border-radius:4px;min-width:120px}
+.perf-card .pc-label{font-family:var(--font-mono);font-size:0.58rem;color:#3d5068;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.3rem}
+.perf-card .pc-val{font-family:var(--font-display);font-size:1.3rem;font-weight:700}
+
 /* signal table */
 .sig-table{border:1px solid var(--border);overflow:hidden}
 .sig-thead{display:grid;grid-template-columns:2fr 0.8fr 1fr 0.8fr 1fr;padding:0.8rem 1.4rem;background:var(--dark);border-bottom:1px solid var(--border)}
@@ -311,7 +340,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 }
 .app-table-head{
   display:grid;
-  grid-template-columns:1.6fr 0.8fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1.2fr;
+  grid-template-columns:1.6fr 0.8fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1.6fr;
   padding:1rem 1.2rem;
   background:var(--dark);
   border-bottom:1px solid var(--border);
@@ -334,7 +363,7 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
 /* ROW */
 .app-row{
   display:grid;
-  grid-template-columns:1.6fr 0.8fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1.2fr;
+  grid-template-columns:1.6fr 0.8fr 1fr 1fr 1fr 0.8fr 1fr 1fr 1.6fr;
   padding:1rem 1.2rem;
   border-bottom:1px solid var(--border);
   align-items:center;
@@ -779,6 +808,12 @@ footer{border-top:1px solid var(--border);padding:3.5rem 4rem;display:grid;grid-
     <div class="scan-loader" id="scan-loader"></div>
     <span id="scan-label">▶ Run Scanner</span>
   </button>
+
+  <!-- PERFORMANCE SUMMARY -->
+  <div style="margin-top:1.2rem;margin-bottom:1rem">
+    <div style="font-family:var(--font-mono);font-size:0.6rem;color:#3d5068;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:0.6rem">📊 Performance Summary</div>
+    <div id="perf-summary" style="display:flex;gap:0.75rem;flex-wrap:wrap"></div>
+  </div>
 
   <!-- TABLE TOOLBAR — professional placement for Export CSV (like Zerodha/TradingView) -->
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;margin-top:0.25rem">
@@ -1388,11 +1423,19 @@ div.innerHTML = `
         <div class="ar-val">${t.rr}</div>
         <div class="ar-val">${t.qty} ${t.qty===1?'share':'shares'}</div>
         <div class="ar-val">₹${Number(t.position).toLocaleString('en-IN')}</div>
-        <div class="ar-val">
+        <div class="ar-val" style="display:flex;flex-direction:column;gap:4px">
           <button class="ar-btn" style="background:${badgeBg};color:#000"
             onclick="event.stopPropagation();showTrade('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty})">
             ${action === 'BUY STOP' ? '⏳ BUY STOP' : action.includes('BEST') ? '🔥 BEST' : action}
           </button>
+          <div style="display:flex;gap:3px" onclick="event.stopPropagation()">
+            <button class="outcome-btn win ${(window._outcomes||{})[t.stock+'_'+t.entry]==='WIN'?'active':''}"
+              onclick="openOutcomeModal('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty},'WIN','LONG')">✓ WIN</button>
+            <button class="outcome-btn loss ${(window._outcomes||{})[t.stock+'_'+t.entry]==='LOSS'?'active':''}"
+              onclick="openOutcomeModal('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty},'LOSS','LONG')">✗ LOSS</button>
+            <button class="outcome-btn open ${(window._outcomes||{})[t.stock+'_'+t.entry]==='OPEN'?'active':''}"
+              onclick="markOutcome('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty},'OPEN','LONG',null,null)">○ OPEN</button>
+          </div>
         </div>
       </div>`;
   }
@@ -1419,11 +1462,19 @@ div.innerHTML = `
         <div class="ar-val">${t.rr}</div>
         <div class="ar-val">${t.qty} ${t.qty===1?'share':'shares'}</div>
         <div class="ar-val">₹${Number(t.position).toLocaleString('en-IN')}</div>
-        <div class="ar-val">
+        <div class="ar-val" style="display:flex;flex-direction:column;gap:4px">
           <button class="ar-btn" style="background:${badgeBg};color:#fff;border-color:${badgeBg}"
             onclick="event.stopPropagation();showTrade('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty})">
             ${action === 'SELL STOP' ? '⏳ SELL STOP' : action.includes('BEST') ? '▼ BEST SHORT' : '▼ SHORT'}
           </button>
+          <div style="display:flex;gap:3px" onclick="event.stopPropagation()">
+            <button class="outcome-btn win ${(window._outcomes||{})[t.stock+'_'+t.entry]==='WIN'?'active':''}"
+              onclick="openOutcomeModal('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty},'WIN','SHORT')">✓ WIN</button>
+            <button class="outcome-btn loss ${(window._outcomes||{})[t.stock+'_'+t.entry]==='LOSS'?'active':''}"
+              onclick="openOutcomeModal('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty},'LOSS','SHORT')">✗ LOSS</button>
+            <button class="outcome-btn open ${(window._outcomes||{})[t.stock+'_'+t.entry]==='OPEN'?'active':''}"
+              onclick="markOutcome('${t.stock}',${t.entry},${t.sl},${t.target},${t.qty},'OPEN','SHORT',null,null)">○ OPEN</button>
+          </div>
         </div>
       </div>`;
   }
@@ -1446,7 +1497,7 @@ div.innerHTML = `
       </div>
       <div class="app-table">
         <div class="app-table-head">
-          <span>STOCK</span><span>SCORE</span><span>ENTRY ₹</span><span>SL ₹</span><span>TARGET ₹</span><span>RR</span><span>QTY</span><span>POSITION ₹</span><span>ACTION</span>
+          <span>STOCK</span><span>SCORE</span><span>ENTRY ₹</span><span>SL ₹</span><span>TARGET ₹</span><span>RR</span><span>QTY</span><span>POSITION ₹</span><span>ACTION / OUTCOME</span>
         </div>
         ${count === 0
           ? `<div style="text-align:center;padding:1.5rem;color:#3d5068;font-family:var(--font-mono);font-size:0.72rem">${emptyMsg}</div>`
@@ -2157,6 +2208,33 @@ function downloadCSV(){
   border-radius:6px;
   overflow:hidden;
 "></div>
+
+<!-- ═══════════ OUTCOME MODAL ═══════════ -->
+<div id="outcome-modal">
+  <div class="outcome-box">
+    <h3 id="om-title">Mark Trade Outcome</h3>
+    <div class="sub" id="om-sub">STOCK · ENTRY ₹0</div>
+    <div class="outcome-field">
+      <label>Exit Price ₹</label>
+      <input id="om-exit" type="number" placeholder="e.g. 1245.50" step="0.05"/>
+    </div>
+    <div class="outcome-field">
+      <label>Exit Date (optional)</label>
+      <input id="om-date" type="date"/>
+    </div>
+    <div class="outcome-field">
+      <label>Notes (optional)</label>
+      <input id="om-notes" type="text" placeholder="e.g. Hit target at open"/>
+    </div>
+    <div class="outcome-btns-row">
+      <button class="outcome-submit cancel" onclick="document.getElementById('outcome-modal').classList.remove('open')">Cancel</button>
+      <button class="outcome-submit win" id="om-submit-win" onclick="submitOutcome('WIN')">✓ Mark WIN</button>
+      <button class="outcome-submit loss" id="om-submit-loss" onclick="submitOutcome('LOSS')">✗ Mark LOSS</button>
+    </div>
+    <div id="om-error" style="font-family:var(--font-mono);font-size:0.65rem;color:#ff4560;margin-top:0.75rem;min-height:1rem"></div>
+  </div>
+</div>
+
 <!-- ═══════════ AUTH MODAL ═══════════ -->
 <div id="auth-overlay">
   <div class="auth-box">
