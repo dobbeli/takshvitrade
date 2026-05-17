@@ -43,6 +43,15 @@ import jwt, os, logging
 router = APIRouter()
 bearer = HTTPBearer(auto_error=False)
 
+# Explicit OPTIONS handler for CORS preflight
+@router.options("")
+def outcomes_options():
+    return {}
+
+@router.options("/{path:path}")
+def outcomes_options_path(path: str):
+    return {}
+
 SECRET = os.getenv("JWT_SECRET", "takshvi-trade-secret-change-in-prod")
 ALGO   = "HS256"
 
