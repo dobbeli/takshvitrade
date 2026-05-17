@@ -27,6 +27,9 @@ from scanner.database import (
 
 print("✅ All imports successful")
 
+from fastapi import Request
+from fastapi.responses import Response
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -48,6 +51,24 @@ app.add_middleware(
     expose_headers=["*"],
     max_age=600,
 )
+
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return Response(
+            status_code=200,
+            headers={
+                "Access-Control-Allow-Origin":  "*",
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+                "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, Origin, X-Requested-With",
+                "Access-Control-Max-Age":       "600",
+            }
+        )
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"]  = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, Origin, X-Requested-With"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
+    return response
 
 app.include_router(market.router,   prefix="/api/market")
 app.include_router(news.router,     prefix="/api/news")
