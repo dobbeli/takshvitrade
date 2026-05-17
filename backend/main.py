@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from routers import market, news, whatsapp, auth
+from outcomes import router as outcomes_router
 from scanner.engine import run_full_scan, run_master_scan, get_market_trend
 from scanner.database import (
     save_scan, save_signals, get_recent_scans,
@@ -50,6 +51,7 @@ app.include_router(market.router,   prefix="/api/market")
 app.include_router(news.router,     prefix="/api/news")
 app.include_router(whatsapp.router, prefix="/api/whatsapp")
 app.include_router(auth.router,     prefix="/api/auth")
+app.include_router(outcomes_router,  prefix="/api/outcomes")
 
 
 @app.get("/")
